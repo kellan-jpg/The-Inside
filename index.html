@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Calculator</title>
+<script>try { var sc = localStorage.getItem("inside:scheme"); if (sc === "pink" || sc === "cream") document.documentElement.dataset.scheme = sc; } catch (e) {}</script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&family=IBM+Plex+Sans:wght@400;500&family=VT323&display=swap">
 <style>
   :root {
@@ -60,7 +61,7 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --page: #000000;
+      --page: #2e3238;
       --body: #12151b;
       --body-edge: #262b34;
       --body-shadow: rgba(0, 0, 0, 0.7);
@@ -85,7 +86,7 @@
     }
   }
   :root[data-theme="dark"] {
-    --page: #000000;
+    --page: #2e3238;
     --body: #12151b;
     --body-edge: #262b34;
     --body-shadow: rgba(0, 0, 0, 0.7);
@@ -849,7 +850,6 @@
     if (view !== 'home') home();
     else if (buf) { buf = ''; cur = 0; }
     else hist = [];
-    resetScheme();
     draw();
   }
   function submit() {
@@ -985,7 +985,6 @@
     calc.hidden = false;
     document.title = "Calculator";
     capturing = false;
-    resetScheme();
     resetAll();
   }
 
@@ -1090,9 +1089,7 @@
     if (capturing && !e.target.closest('.keybtn')) finishCapture();
   });
 
-  // Going back to the calculator (lock or AC) also puts the colors back to default.
-  function resetScheme() { if (scheme) applyScheme(''); }
-
+  
   function keyPicker() {
     const wrap = el('div', 'scheme');
     wrap.append(el('span', '', 'Return to calculator key'));
