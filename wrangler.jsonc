@@ -1,7 +1,7 @@
 {
   // IMPORTANT: replace the text below with the exact name of your project in the
   // Cloudflare dashboard (Workers & Pages, then the name shown at the top of your project).
-  "name": "REPLACE_WITH_YOUR_WORKER_NAME",
+  "name": "the-inside",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
 
