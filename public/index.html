@@ -454,6 +454,15 @@
   .pad .r { clip-path: polygon(55% 50%, 91% 15%, 91% 85%); align-items: center; justify-content: flex-end; filter: brightness(0.94); }
   .keys .pad button:active { transform: scale(0.93); filter: brightness(0.72); }
   .pad::after { content: ''; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%; background: radial-gradient(circle at 35% 28%, var(--key-hi), var(--key-lo)); border: 1px solid var(--key-edge); box-shadow: 0 2px 0 var(--key-edge), 0 4px 6px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--sheen); pointer-events: none; }
+
+  /* ---------- Games, videos, search, updates badge ---------- */
+  .player, .gamebox { display: block; width: 100%; border: 0; border-radius: 14px; background: #000; }
+  .player { aspect-ratio: 16 / 9; }
+  .gamebox { height: 72vh; min-height: 360px; }
+  .bar-form strong { flex: 1; align-self: center; font-weight: 500; }
+  .cse-wrap { padding: 8px; border-radius: 14px; background: #fff; color: #222; }
+  .room input.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .feed .new { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--vault-accent); color: var(--on-accent); font-size: 11px; font-style: normal; font-weight: 600; vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -503,7 +512,7 @@
     </section>
     <section>
       <h2>Latest updates</h2>
-      <ul class="feed">
+      <ul class="feed" id="updates">
         <li><strong>New entry added</strong><span>2 hours ago</span></li>
         <li><strong>Archive reorganized</strong><span>Yesterday</span></li>
         <li><strong>Three files updated</strong><span>2 days ago</span></li>
@@ -1141,40 +1150,204 @@
   
 
   // Each tab is a title, a one-line intro, and a build() that fills its screen.
+  // ---- Things you can edit ----
+  const GOOGLE_CX = 'c436ba503289d469b';   // Paste your Google Programmable Search Engine ID here to turn on Blud Browser.
+  const GAMES = [         // Each game: a title, a url, and an optional thumb picture.
+    { title: 'Tic-Tac-Toe', url: '/games/tictactoe.html' },
+    { title: 'Memory Match', url: '/games/memory.html' }
+    // Games you host yourself (a folder inside public/games/):
+    // { title: 'Game name', url: '/games/my-game/index.html', thumb: '/games/my-game/thumb.jpg' },
+    // Games from a catalog provider use the link or embed address they give you:
+    // { title: 'Game name', url: 'https://example.com/the-link-they-gave-you' },
+  ];
+  const VIDEOS = [        // Optional shortcuts under the video player, like { title: 'Name', id: 'YOUTUBE_VIDEO_ID' }
+  ];
+
+  function agoText(ts) {
+    const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + ' min ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' hr ago';
+    const d = Math.floor(h / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+
+  // Latest updates come from your database. If it isn't connected, the sample list stays.
+  async function loadUpdates() {
+    const ul = document.getElementById('updates');
+    try {
+      const r = await fetch('/api/updates', { cache: 'no-store' });
+      const d = await r.json();
+      if (!r.ok || !Array.isArray(d.updates)) return;
+      const seen = Number(load('lastseen', '0'));
+      ul.textContent = '';
+      if (!d.updates.length) {
+        const li = el('li');
+        li.append(el('strong', '', 'Nothing new yet'));
+        ul.append(li);
+      }
+      d.updates.forEach(u => {
+        const li = el('li');
+        const st = el('strong', '', u.title);
+        if (seen && new Date(u.created_at).getTime() > seen) st.append(' ', el('em', 'new', 'NEW'));
+        li.append(st, el('span', '', agoText(u.created_at)));
+        ul.append(li);
+      });
+      save('lastseen', String(Date.now()));
+    } catch (e) {}
+  }
+
+  async function postJson(url, data) {
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+    let d = {};
+    try { d = await r.json(); } catch (e) {}
+    return { ok: r.ok, data: d };
+  }
+
   const TABS = {
-    games: { title: 'Games', intro: 'Pick something to play.', build() {} },
-    videos: { title: 'Videos', intro: 'Pick something to watch.', build() {} },
-    google: {
-      title: 'Blud Browser', intro: 'Search the web.',
+    games: {
+      title: 'Games', intro: 'Pick a game and it opens right here.',
+      build(root) {
+        if (!GAMES.length) { root.append(el('p', '', 'No games yet.')); return; }
+        const home = el('div', 'stack');
+        const search = el('input');
+        search.type = 'search';
+        search.placeholder = 'Search games';
+        const list = el('div', 'tiles');
+        const player = el('div', 'stack');
+        player.hidden = true;
+        const show = q => {
+          list.textContent = '';
+          GAMES.filter(g => g.title.toLowerCase().includes(q.toLowerCase())).forEach(g => {
+            const b = el('button', 'tile', g.title);
+            if (g.thumb) {
+              b.style.backgroundImage = 'linear-gradient(transparent 35%, rgba(0, 0, 0, 0.8)), url("' + g.thumb + '")';
+              b.style.backgroundSize = 'cover';
+              b.style.color = '#fff';
+            }
+            b.addEventListener('click', () => open(g));
+            list.append(b);
+          });
+          if (!list.children.length) list.append(el('p', '', 'No games match that.'));
+        };
+        const open = g => {
+          home.hidden = true;
+          player.hidden = false;
+          player.textContent = '';
+          const f = document.createElement('iframe');
+          f.className = 'gamebox';
+          f.src = g.url;
+          f.title = g.title;
+          f.allow = 'fullscreen; gamepad';
+          f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock allow-fullscreen allow-popups allow-forms');
+          f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) {} });
+          const bar = el('div', 'bar-form');
+          const back = el('button', '', 'Back to games');
+          back.addEventListener('click', () => { player.textContent = ''; player.hidden = true; home.hidden = false; });
+          const full = el('button', '', 'Full screen');
+          full.addEventListener('click', () => { if (f.requestFullscreen) f.requestFullscreen(); });
+          bar.append(back, el('strong', '', g.title), full);
+          player.append(bar, f);
+        };
+        search.addEventListener('input', () => show(search.value));
+        show('');
+        home.append(search, list);
+        root.append(home, player);
+      }
+    },
+    videos: {
+      title: 'Videos', intro: 'Paste a YouTube link to watch it here. Captions turn on automatically when a video has them.',
       build(root) {
         const form = el('div', 'bar-form');
         const input = el('input');
-        input.type = 'search';
-        input.placeholder = 'Search';
-        const btn = el('button', '', 'Search');
-        const out = el('p');
-        const go = () => { out.textContent = input.value.trim() ? 'Search is not connected yet.' : ''; };
+        input.type = 'url';
+        input.placeholder = 'Paste a YouTube link';
+        const btn = el('button', '', 'Watch');
+        const note = el('p');
+        const holder = el('div');
+        const ytId = u => {
+          const m = String(u).trim().match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
+          return m ? m[1] : null;
+        };
+        const play = id => {
+          holder.textContent = '';
+          const f = document.createElement('iframe');
+          f.className = 'player';
+          f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?rel=0&cc_load_policy=1';
+          f.title = 'YouTube video player';
+          f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+          f.allowFullscreen = true;
+          f.referrerPolicy = 'strict-origin-when-cross-origin';
+          holder.append(f);
+        };
+        const go = () => {
+          const id = ytId(input.value);
+          if (!id) { note.textContent = "That doesn't look like a YouTube link."; return; }
+          note.textContent = '';
+          play(id);
+        };
         btn.addEventListener('click', go);
         input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
         form.append(input, btn);
-        root.append(form, out);
+        root.append(form, note, holder);
+        if (VIDEOS.length) {
+          const list = el('div', 'tiles');
+          VIDEOS.forEach(v => {
+            const b = el('button', 'tile', v.title);
+            b.addEventListener('click', () => play(v.id));
+            list.append(b);
+          });
+          root.append(list);
+        }
+      }
+    },
+    google: {
+      title: 'Blud Browser', intro: 'Search the web.',
+      build(root) {
+        if (!GOOGLE_CX) { root.append(el('p', '', 'Search is almost ready. It turns on once the search ID is added to the site.')); return; }
+        const box = el('div', 'cse-wrap');
+        const node = el('div');
+        box.append(node);
+        root.append(box);
+        const draw = () => google.search.cse.element.render({ div: node, tag: 'search' });
+        if (window.google && google.search && google.search.cse && google.search.cse.element) { draw(); return; }
+        window.__gcse = { parsetags: 'explicit', callback: draw };
+        const sc = document.createElement('script');
+        sc.async = true;
+        sc.src = 'https://cse.google.com/cse.js?cx=' + encodeURIComponent(GOOGLE_CX);
+        document.head.append(sc);
       }
     },
     ai: {
       title: 'Bludle', intro: 'Ask anything.',
       build(root) {
+        const convo = [];
+        let busy = false;
         const log = el('div', 'chat');
         log.append(el('div', 'msg bot', "Hi, I'm Bludle. Ask me anything."));
         const form = el('div', 'bar-form');
         const input = el('input');
         input.placeholder = 'Message';
+        input.maxLength = 1000;
         const btn = el('button', '', 'Send');
-        const send = () => {
+        const send = async () => {
           const v = input.value.trim();
-          if (!v) return;
-          log.append(el('div', 'msg me', v), el('div', 'msg bot', 'AI is not connected yet.'));
+          if (!v || busy) return;
+          busy = true;
           input.value = '';
-          log.lastChild.scrollIntoView({ block: 'nearest' });
+          log.append(el('div', 'msg me', v));
+          const wait = el('div', 'msg bot', '...');
+          log.append(wait);
+          convo.push({ role: 'user', content: v });
+          try {
+            const { ok, data } = await postJson('/api/chat', { messages: convo });
+            if (ok && data.reply) { wait.textContent = data.reply; convo.push({ role: 'assistant', content: data.reply }); }
+            else { wait.textContent = data.error || "Bludle isn't connected yet."; convo.pop(); }
+          } catch (e) { wait.textContent = "Bludle isn't connected yet."; convo.pop(); }
+          busy = false;
+          wait.scrollIntoView({ block: 'nearest' });
         };
         btn.addEventListener('click', send);
         input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
@@ -1187,18 +1360,35 @@
       build(root) {
         const ta = el('textarea');
         ta.rows = 4;
+        ta.maxLength = 500;
         ta.placeholder = 'What do you want added?';
+        const trap = el('input', 'hp');
+        trap.name = 'website';
+        trap.tabIndex = -1;
+        trap.autocomplete = 'off';
+        trap.setAttribute('aria-hidden', 'true');
         const btn = el('button', 'solid', 'Submit request');
+        const note = el('p');
         const list = el('ul', 'feed');
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const v = ta.value.trim();
           if (!v) return;
-          const li = el('li');
-          li.append(el('strong', '', v), el('span', '', 'Submitted just now'));
-          list.prepend(li);
-          ta.value = '';
+          btn.disabled = true;
+          note.textContent = 'Sending...';
+          try {
+            const { ok, data } = await postJson('/api/request', { text: v, website: trap.value });
+            if (!ok) throw new Error(data.error || 'fail');
+            const li = el('li');
+            li.append(el('strong', '', v), el('span', '', 'Sent just now'));
+            list.prepend(li);
+            ta.value = '';
+            note.textContent = 'Request sent. Thanks!';
+          } catch (e) {
+            note.textContent = e.message && e.message !== 'fail' && e.message !== 'Failed to fetch' ? e.message : "Couldn't send that right now. Try again later.";
+          }
+          btn.disabled = false;
         });
-        root.append(ta, btn, list);
+        root.append(ta, trap, btn, note, list);
       }
     },
     settings: {
@@ -1218,6 +1408,13 @@
       }
     }
   };
+
+  // Games on this site tell the page when a key is pressed inside them,
+  // so the return-to-calculator key still works while a game has focus.
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'inside-key' || !unlocked()) return;
+    if (e.data.key === 'Escape' || normKey(String(e.data.key)) === lockKey) lock();
+  });
 
   function showTab(name) {
     const t = TABS[name];
@@ -1257,7 +1454,7 @@
     inside.focus();
   }
 
-  document.getElementById("agree").addEventListener("click", enter);
+  document.getElementById('agree').addEventListener('click', () => { enter(); loadUpdates(); });
   document.getElementById("lock").addEventListener("click", lock);
   document.getElementById("lock2").addEventListener("click", lock);
 
