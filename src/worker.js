@@ -103,6 +103,54 @@ async function updates(env) {
   return json({ updates: await res.json() });
 }
 
+// Setup check: open /api/health on your site to see what is and isn't connected.
+// It never shows your keys, only yes/no answers and error messages. Remove it once everything works.
+function keyKind(k) {
+  if (!k) return "missing";
+  if (k !== k.trim()) return "has a space or line break at the start or end (re-paste it)";
+  if (k.startsWith("sb_secret_")) return "secret key (correct)";
+  if (k.startsWith("sb_publishable_")) return "publishable key (WRONG: use the secret key)";
+  if (k.startsWith("eyJ")) {
+    try {
+      const role = JSON.parse(atob(k.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).role;
+      return role === "service_role" ? "service_role key (correct)" : role + " key (WRONG: use the secret key)";
+    } catch { return "not recognized"; }
+  }
+  return "not recognized";
+}
+
+async function health(env) {
+  const model = env.CLAUDE_MODEL || "claude-haiku-5-5";
+  const out = { anthropic: { keySet: !!env.ANTHROPIC_API_KEY, model }, supabase: {} };
+  if (env.ANTHROPIC_API_KEY) {
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: "user", content: "hi" }] })
+      });
+      out.anthropic.status = r.status;
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        out.anthropic.problem = (e.error && e.error.message) || "unknown problem";
+      }
+    } catch { out.anthropic.problem = "could not reach Anthropic"; }
+  }
+  const url = env.SUPABASE_URL || "";
+  out.supabase.url = !url ? "missing" : url !== url.trim() ? "has a space or line break (re-paste it)"
+    : /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url) ? "looks right" : "does not look like https://yourproject.supabase.co";
+  out.supabase.key = keyKind(env.SUPABASE_SECRET_KEY);
+  if (url && env.SUPABASE_SECRET_KEY) {
+    for (const table of ["requests", "updates"]) {
+      try {
+        const r = await supabase(env, table + "?select=id&limit=1");
+        out.supabase[table] = r.ok ? "ok" : "error " + r.status + ": " + (await r.text()).slice(0, 140);
+      } catch { out.supabase[table] = "could not reach Supabase (check the URL)"; }
+    }
+  }
+  return json(out);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -120,6 +168,10 @@ export default {
         return await submitRequest(request, env);
       }
       if (path === "/api/updates" && request.method === "GET") return await updates(env);
+      if (path === "/api/health" && request.method === "GET") {
+        if (limited(ip + ":health", 4, 60000)) return json({ error: "Slow down a little." }, 429);
+        return await health(env);
+      }
       return json({ error: "Not found." }, 404);
     } catch {
       return json({ error: "Something went wrong." }, 500);
