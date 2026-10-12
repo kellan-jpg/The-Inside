@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory Match</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e13; color: #e8ecf1; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; }
+  #g { display: grid; grid-template-columns: repeat(4, 72px); gap: 8px; justify-content: center; }
+  .card { width: 72px; height: 72px; font-size: 30px; border: 1px solid #232a36; border-radius: 12px; background: linear-gradient(160deg, #1a2a4a, #10151d); color: #fff; cursor: pointer; }
+  .card.up { background: #10151d; color: #8fb8ff; }
+  .card.done { background: #1c3a6b; border-color: #4b94ff; color: #fff; }
+  p { margin: 14px 0 8px; color: #8b94a1; }
+  .again { font: inherit; font-size: 15px; font-weight: 500; padding: 9px 18px; border: 0; border-radius: 10px; background: #4b94ff; color: #04070c; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="g"></div>
+  <p id="m"></p>
+  <button class="again" id="r">New game</button>
+</div>
+<script>
+  const sym = ['★', '♥', '♦', '♣', '♠', '●', '▲', '■'];
+  const g = document.getElementById('g'), m = document.getElementById('m');
+  let cards, open, busy, matched, moves;
+
+  function reset() {
+    cards = [...sym, ...sym];
+    for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; }
+    open = []; busy = false; matched = 0; moves = 0;
+    m.textContent = 'Moves: 0';
+    g.textContent = '';
+    cards.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = 'card';
+      b.setAttribute('aria-label', 'Card ' + (i + 1));
+      b.onclick = () => flip(i, b);
+      g.append(b);
+    });
+  }
+  function flip(i, b) {
+    if (busy || b.classList.contains('up')) return;
+    b.classList.add('up');
+    b.textContent = cards[i];
+    b._v = cards[i];
+    open.push(b);
+    if (open.length < 2) return;
+    moves++;
+    m.textContent = 'Moves: ' + moves;
+    const [x, y] = open;
+    if (x._v === y._v) {
+      x.classList.add('done'); y.classList.add('done');
+      open = [];
+      if (++matched === sym.length) m.textContent = 'You won in ' + moves + ' moves!';
+    } else {
+      busy = true;
+      setTimeout(() => { [x, y].forEach(e => { e.classList.remove('up'); e.textContent = ''; }); open = []; busy = false; }, 700);
+    }
+  }
+  document.getElementById('r').onclick = reset;
+  // Let the main site see key presses, so its return-to-calculator key still works.
+  addEventListener('keydown', e => parent.postMessage({ type: 'inside-key', key: e.key }, location.origin));
+  reset();
+</script>
+</body>
+</html>
