@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pong</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e13; color: #e8ecf1; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; }
+  canvas { background: #10151d; border: 2px solid #232a36; border-radius: 12px; max-width: 94vw; touch-action: none; }
+  p { margin: 10px 12px 0; color: #8b94a1; font-size: 14px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="c" width="480" height="320"></canvas>
+  <p id="m"></p>
+</div>
+<script>
+  const c = document.getElementById('c'), g = c.getContext('2d'), msg = document.getElementById('m');
+  const W = c.width, H = c.height, PH = 64, PW = 10, WIN = 7;
+  let py, ay, bx, by, vx, vy, ps, cs, run, over;
+  const keys = {};
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  function serve(dir) { bx = W / 2; by = H / 2; vx = dir * 4; vy = (Math.random() * 2 - 1) * 2.5; }
+  function reset() {
+    py = ay = (H - PH) / 2; ps = cs = 0; over = false; run = false; serve(1);
+    msg.textContent = 'Click or press a key to start. Move with the mouse, touch, W and S, or the arrow keys. First to ' + WIN + ' wins.';
+    draw();
+  }
+  function point(dir) {
+    if (ps >= WIN || cs >= WIN) {
+      over = true; run = false;
+      msg.textContent = (ps >= WIN ? 'You win!' : 'The computer wins.') + ' Click or press a key to play again.';
+      return;
+    }
+    serve(dir);
+  }
+  function tick() {
+    if (!run) return;
+    if (keys.ArrowUp || keys.w) py -= 5;
+    if (keys.ArrowDown || keys.s) py += 5;
+    py = clamp(py, 0, H - PH);
+    ay = clamp(ay + clamp(by - PH / 2 - ay, -3.2, 3.2), 0, H - PH);
+    bx += vx; by += vy;
+    if (by < 5 || by > H - 5) { vy = -vy; by = clamp(by, 5, H - 5); }
+    if (vx < 0 && bx <= 25 && bx >= 10 && by >= py - 4 && by <= py + PH + 4) {
+      vx = clamp(-vx * 1.06, -9, 9); vy = clamp(vy + (by - (py + PH / 2)) / (PH / 2) * 2.5, -7, 7); bx = 25;
+    }
+    if (vx > 0 && bx >= W - 25 && bx <= W - 10 && by >= ay - 4 && by <= ay + PH + 4) {
+      vx = clamp(-vx * 1.06, -9, 9); vy = clamp(vy + (by - (ay + PH / 2)) / (PH / 2) * 2.5, -7, 7); bx = W - 25;
+    }
+    if (bx < 0) { cs++; point(-1); } else if (bx > W) { ps++; point(1); }
+    draw();
+  }
+  function draw() {
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = '#3b4658'; g.lineWidth = 3; g.setLineDash([10, 10]);
+    g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#ffffff'; g.fillRect(10, py, PW, PH);
+    g.fillStyle = '#4b94ff'; g.fillRect(W - 10 - PW, ay, PW, PH);
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(bx, by, 5, 0, 7); g.fill();
+    g.fillStyle = '#6b7686'; g.font = '40px system-ui, sans-serif'; g.textAlign = 'center';
+    g.fillText(ps, W / 4, 50); g.fillText(cs, W * 3 / 4, 50);
+  }
+  function start() { if (over) reset(); run = true; msg.textContent = ''; }
+
+  c.addEventListener('pointerdown', start);
+  c.addEventListener('pointermove', e => {
+    const r = c.getBoundingClientRect();
+    py = clamp((e.clientY - r.top) * (H / r.height) - PH / 2, 0, H - PH);
+    if (!run) draw();
+  });
+  addEventListener('keydown', e => {
+    // Let the main site see key presses, so its return-to-calculator key still works.
+    parent.postMessage({ type: 'inside-key', key: e.key }, location.origin);
+    keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
+    if (!run) start();
+  });
+  addEventListener('keyup', e => { keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
+  setInterval(tick, 16);
+  reset();
+</script>
+</body>
+</html>
