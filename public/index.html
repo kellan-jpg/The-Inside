@@ -463,16 +463,6 @@
   .cse-wrap { padding: 8px; border-radius: 14px; background: #fff; color: #222; }
   .room input.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
   .feed .new { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--vault-accent); color: var(--on-accent); font-size: 11px; font-style: normal; font-weight: 600; vertical-align: middle; }
-
-  .room p.disclaimer { font-size: 14px; }
-  .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--vault-accent); text-decoration: underline; cursor: pointer; }
-  .linkbtn:focus-visible { outline: 2px solid var(--vault-accent); outline-offset: 2px; }
-
-  .pageframe { display: block; width: 100%; height: 72vh; min-height: 360px; border: 0; border-radius: 14px; background: #fff; }
-
-  .bar-form { flex-wrap: wrap; }
-  .bar-form strong { min-width: 120px; }
-  .stack .chips { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -1163,17 +1153,12 @@
   // ---- Things you can edit ----
   const GOOGLE_CX = 'c436ba503289d469b';   // Paste your Google Programmable Search Engine ID here to turn on Blud Browser.
   const GAMES = [         // Each game: a title, a url, and an optional thumb picture.
-    { title: 'Tic-Tac-Toe', url: '/games/tictactoe.html', thumb: '/games/thumbs/tictactoe.svg' },
-    { title: 'Memory Match', url: '/games/memory.html', thumb: '/games/thumbs/memory.svg' },
-    { title: 'Pong', url: '/games/pong.html', thumb: '/games/thumbs/pong.svg' },
-    { title: 'Minesweeper', url: '/games/minesweeper.html', thumb: '/games/thumbs/minesweeper.svg' }
+    { title: 'Tic-Tac-Toe', url: '/games/tictactoe.html' },
+    { title: 'Memory Match', url: '/games/memory.html' }
     // Games you host yourself (a folder inside public/games/):
     // { title: 'Game name', url: '/games/my-game/index.html', thumb: '/games/my-game/thumb.jpg' },
     // Games from a catalog provider use the link or embed address they give you:
     // { title: 'Game name', url: 'https://example.com/the-link-they-gave-you' },
-  ];
-  const SEARCH_SITES = [  // The sites your search covers. They show as a list under the search box.
-    'YouTube', 'TikTok', 'Instagram', 'Crunchyroll', 'X', 'Reddit', 'ChatGPT', 'Spotify', 'Cool Math Games'
   ];
   const VIDEOS = [        // Optional shortcuts under the video player, like { title: 'Name', id: 'YOUTUBE_VIDEO_ID' }
   ];
@@ -1319,69 +1304,13 @@
       }
     },
     google: {
-      title: 'Blud Browser', intro: 'Search the sites we picked.',
+      title: 'Blud Browser', intro: 'Search the web.',
       build(root) {
         if (!GOOGLE_CX) { root.append(el('p', '', 'Search is almost ready. It turns on once the search ID is added to the site.')); return; }
         const box = el('div', 'cse-wrap');
         const node = el('div');
         box.append(node);
-        const note = el('p', 'disclaimer');
-        note.append(SEARCH_SITES.length ? 'Only the sites listed below are available here. ' : 'Only the sites we picked are available here. ');
-        note.append('Want more? ');
-        const go = el('button', 'linkbtn', 'Go to Requests');
-        go.addEventListener('click', () => showTab('requests'));
-        note.append(go, ' and request more sites.');
-        const searchView = el('div', 'stack');
-        const chips = el('div', 'chips');
-        SEARCH_SITES.forEach(n => chips.append(el('span', '', n)));
-        searchView.append(box, note, chips);
-        const viewer = el('div', 'stack');
-        viewer.hidden = true;
-        root.append(searchView, viewer);
-
-        // Search results open in a viewer inside this page instead of leaving it.
-        const realUrl = a => {
-          if (a.dataset.ctorig) return a.dataset.ctorig;
-          try {
-            const u = new URL(a.href);
-            if (/(^|\.)google\.com$/.test(u.hostname) && u.pathname === '/url') return u.searchParams.get('q') || u.searchParams.get('url') || a.href;
-          } catch (e) {}
-          return a.href;
-        };
-        const openPage = url => {
-          let host = url;
-          try { host = new URL(url).hostname; } catch (e) {}
-          viewer.textContent = '';
-          const bar = el('div', 'bar-form');
-          const back = el('button', '', 'Back to results');
-          back.addEventListener('click', () => { viewer.textContent = ''; viewer.hidden = true; searchView.hidden = false; });
-          const out = el('button', '', 'Open in new tab');
-          out.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
-          const full = el('button', '', 'Full screen');
-          full.addEventListener('click', () => { if (f.requestFullscreen) f.requestFullscreen(); });
-          bar.append(back, el('strong', '', host), full, out);
-          const f = document.createElement('iframe');
-          f.className = 'pageframe';
-          f.src = url;
-          f.title = host;
-          f.allow = 'fullscreen';
-          f.referrerPolicy = 'no-referrer';
-          f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
-          viewer.append(bar, f, el('p', 'disclaimer', "If the page stays blank, that site doesn't allow being shown here. Use Open in new tab."));
-          searchView.hidden = true;
-          viewer.hidden = false;
-          viewer.scrollIntoView({ block: 'start' });
-        };
-        box.addEventListener('click', e => {
-          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          const a = e.target.closest('a');
-          if (!a || a.closest('.gsc-adBlock') || !a.closest('.gsc-webResult, .gsc-imageResult')) return;
-          const url = realUrl(a);
-          if (!/^https?:\/\//i.test(url)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          openPage(url);
-        }, true);
+        root.append(box);
         const draw = () => google.search.cse.element.render({ div: node, tag: 'search' });
         if (window.google && google.search && google.search.cse && google.search.cse.element) { draw(); return; }
         window.__gcse = { parsetags: 'explicit', callback: draw };
