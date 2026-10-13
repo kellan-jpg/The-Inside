@@ -473,6 +473,9 @@
   .bar-form { flex-wrap: wrap; }
   .bar-form strong { min-width: 120px; }
   .stack .chips { margin-top: 0; }
+
+  .msg.bot a { color: var(--vault-accent); word-break: break-all; }
+  .msg .player { width: min(420px, 70vw); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -1178,6 +1181,47 @@
   const VIDEOS = [        // Optional shortcuts under the video player, like { title: 'Name', id: 'YOUTUBE_VIDEO_ID' }
   ];
 
+  // Bludle replies: links you can click, and a Watch here button that plays a YouTube link in the chat.
+  function ytIdOf(u) {
+    const m = String(u).trim().match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }
+  function renderReply(node, text) {
+    node.textContent = '';
+    const re = /https?:\/\/[^\s<>"')]+/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      node.append(text.slice(last, m.index));
+      const url = m[0].replace(/[.,;:!?]+$/, '');
+      const a = el('a', '', url);
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      node.append(a);
+      const id = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url) ? ytIdOf(url) : null;
+      if (id) {
+        const b = el('button', 'linkbtn', 'Watch here');
+        let f = null;
+        b.addEventListener('click', () => {
+          if (f) { f.remove(); f = null; b.textContent = 'Watch here'; return; }
+          f = document.createElement('iframe');
+          f.className = 'player';
+          f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?rel=0&cc_load_policy=1';
+          f.title = 'YouTube video player';
+          f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+          f.allowFullscreen = true;
+          f.referrerPolicy = 'strict-origin-when-cross-origin';
+          node.append(f);
+          b.textContent = 'Hide video';
+        });
+        node.append(' ', b);
+      }
+      last = m.index + url.length;
+      re.lastIndex = last;
+    }
+    node.append(text.slice(last));
+  }
+
   function agoText(ts) {
     const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
     if (s < 60) return 'just now';
@@ -1306,7 +1350,12 @@
         btn.addEventListener('click', go);
         input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
         form.append(input, btn);
-        root.append(form, note, holder);
+        const hint = el('p', 'disclaimer');
+        hint.append("Don't have a YouTube link? ");
+        const askBtn = el('button', 'linkbtn', 'Ask Bludle!');
+        askBtn.addEventListener('click', () => showTab('ai'));
+        hint.append(askBtn);
+        root.append(form, note, hint, holder);
         if (VIDEOS.length) {
           const list = el('div', 'tiles');
           VIDEOS.forEach(v => {
@@ -1414,7 +1463,7 @@
           convo.push({ role: 'user', content: v });
           try {
             const { ok, data } = await postJson('/api/chat', { messages: convo });
-            if (ok && data.reply) { wait.textContent = data.reply; convo.push({ role: 'assistant', content: data.reply }); }
+            if (ok && data.reply) { renderReply(wait, data.reply); convo.push({ role: 'assistant', content: data.reply }); }
             else { wait.textContent = data.error || "Bludle isn't connected yet."; convo.pop(); }
           } catch (e) { wait.textContent = "Bludle isn't connected yet."; convo.pop(); }
           busy = false;
