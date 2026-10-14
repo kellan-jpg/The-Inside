@@ -1182,6 +1182,7 @@
   ];
 
   // Bludle replies: links you can click, and a Watch here button that plays a YouTube link in the chat.
+  const COOLDOWN_MSG = 'Please wait a 10 second cooldown before sending another message.';
   function ytIdOf(u) {
     const m = String(u).trim().match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
     return m ? m[1] : null;
@@ -1262,7 +1263,7 @@
     const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
     let d = {};
     try { d = await r.json(); } catch (e) {}
-    return { ok: r.ok, data: d };
+    return { ok: r.ok, status: r.status, data: d };
   }
 
   const TABS = {
@@ -1462,9 +1463,9 @@
           log.append(wait);
           convo.push({ role: 'user', content: v });
           try {
-            const { ok, data } = await postJson('/api/chat', { messages: convo });
+            const { ok, status, data } = await postJson('/api/chat', { messages: convo });
             if (ok && data.reply) { renderReply(wait, data.reply); convo.push({ role: 'assistant', content: data.reply }); }
-            else { wait.textContent = data.error || "Bludle isn't connected yet."; convo.pop(); }
+            else { wait.textContent = status === 429 ? COOLDOWN_MSG : (data.error || "Bludle isn't connected yet."); convo.pop(); }
           } catch (e) { wait.textContent = "Bludle isn't connected yet."; convo.pop(); }
           busy = false;
           wait.scrollIntoView({ block: 'nearest' });
@@ -1472,7 +1473,8 @@
         btn.addEventListener('click', send);
         input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
         form.append(input, btn);
-        root.append(log, form);
+        const warn = el('p', 'disclaimer', 'Heads up: if you send messages too quickly, Bludle makes you wait a 10 second cooldown.');
+        root.append(log, form, warn);
       }
     },
     requests: {
@@ -1496,8 +1498,8 @@
           btn.disabled = true;
           note.textContent = 'Sending...';
           try {
-            const { ok, data } = await postJson('/api/request', { text: v, website: trap.value });
-            if (!ok) throw new Error(data.error || 'fail');
+            const { ok, status, data } = await postJson('/api/request', { text: v, website: trap.value });
+            if (!ok) throw new Error(status === 429 ? 'Please wait a moment before sending another request.' : (data.error || 'fail'));
             const li = el('li');
             li.append(el('strong', '', v), el('span', '', 'Sent just now'));
             list.prepend(li);
