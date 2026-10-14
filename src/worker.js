@@ -11,7 +11,8 @@ const SYSTEM = [
   "You can help with explanations, ideas, writing, coding, and general questions.",
   "Never claim to be human. If someone asks what you are, say you're an AI assistant called Bludle.",
   "Politely decline anything dangerous, hateful, sexual, or illegal. If someone seems unsafe or in crisis, respond kindly and encourage them to talk to a trusted adult or local emergency services.",
-  "You have a tool that finds the newest video on a YouTube channel. Use it when someone asks for the latest or newest video from a creator or channel.",
+  "You have two YouTube tools. One finds the newest video on a channel. The other searches for specific videos by title or topic, and can look inside one channel. Use them whenever someone asks for a YouTube video.",
+  "If a search returns several videos, list each one with its channel and its link on its own line. If nothing matches, say so plainly.",
   "Only share links that come from your tools. Never guess or invent a link. Always say which channel you found so the person can check it is the right one, and put the full link on its own line."
 ].join(" ");
 
@@ -51,80 +52,120 @@ async function readJson(request) {
   try { return await request.json(); } catch { return null; }
 }
 
-const TOOLS = [{
-  name: "latest_youtube_video",
-  description: "Find the newest video uploaded to a YouTube channel. Returns the channel name, the video title, its link and the upload date.",
-  input_schema: {
-    type: "object",
-    properties: { channel: { type: "string", description: "The channel name or @handle, like @examplechannel or Example Creator" } },
-    required: ["channel"]
+const TOOLS = [
+  {
+    name: "latest_youtube_video",
+    description: "Find the newest video uploaded to a YouTube channel. Returns the channel name, the video title, its link and the upload date.",
+    input_schema: {
+      type: "object",
+      properties: { channel: { type: "string", description: "The channel name or @handle, like @examplechannel or Example Creator" } },
+      required: ["channel"]
+    }
+  },
+  {
+    name: "search_youtube_videos",
+    description: "Search YouTube for specific videos by title or topic, optionally inside one channel. Returns up to 3 matches, each with a title, channel, link and upload date. Use it when someone wants a particular video rather than the newest one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to search for, like part of the video title or its topic" },
+        channel: { type: "string", description: "Optional. A channel name or @handle to search inside" }
+      },
+      required: ["query"]
+    }
   }
-}];
+];
 
 // Remember lookups for 10 minutes so repeat questions don't use up the daily YouTube allowance.
 const videoCache = new Map();
+const cacheGet = k => { const c = videoCache.get(k); return c && Date.now() - c.at < 600000 ? c.value : null; };
+const cacheSet = (k, value) => { if (videoCache.size > 200) videoCache.clear(); videoCache.set(k, { at: Date.now(), value }); return value; };
+const decode = t => String(t || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+
+async function yt(env, path, params) {
+  const u = new URL("https://www.googleapis.com/youtube/v3/" + path);
+  Object.entries({ ...params, key: env.YOUTUBE_API_KEY }).forEach(([k, v]) => u.searchParams.set(k, v));
+  const r = await fetch(u);
+  if (!r.ok) {
+    let why = "";
+    try {
+      const e = (await r.json()).error || {};
+      const reason = e.errors && e.errors[0] && e.errors[0].reason;
+      why = (reason ? reason + ": " : "") + (e.message || "");
+    } catch {}
+    throw new Error("YouTube said " + r.status + (why ? " (" + why.slice(0, 180) + ")" : ""));
+  }
+  return r.json();
+}
+
+// Cheap handle lookup first (1 unit), then a name search (100 units) only if that finds nothing.
+async function findChannel(env, name) {
+  const handle = name.startsWith("@") ? name : "@" + name.replace(/\s+/g, "");
+  if (/^@[A-Za-z0-9._-]{3,30}$/.test(handle)) {
+    const d = await yt(env, "channels", { part: "id,snippet", forHandle: handle });
+    const c = d.items && d.items[0];
+    if (c) return { id: c.id, title: c.snippet.title };
+  }
+  const d = await yt(env, "search", { part: "snippet", type: "channel", q: name, maxResults: 1 });
+  const c = d.items && d.items[0];
+  const id = c && (c.snippet.channelId || (c.id && c.id.channelId));
+  return id ? { id, title: c.snippet.title || c.snippet.channelTitle || name } : null;
+}
 
 async function latestVideo(env, channel) {
-  const key = env.YOUTUBE_API_KEY;
-  if (!key) return { error: "YouTube lookup is not set up yet." };
+  if (!env.YOUTUBE_API_KEY) return { error: "YouTube lookup is not set up yet." };
   const q = String(channel || "").trim().slice(0, 80);
   if (!q) return { error: "No channel name was given." };
-  const cached = videoCache.get(q.toLowerCase());
-  if (cached && Date.now() - cached.at < 600000) return cached.value;
-
-  const yt = async (path, params) => {
-    const u = new URL("https://www.googleapis.com/youtube/v3/" + path);
-    Object.entries({ ...params, key }).forEach(([k, v]) => u.searchParams.set(k, v));
-    const r = await fetch(u);
-    if (!r.ok) {
-      let why = "";
-      try {
-        const e = (await r.json()).error || {};
-        const reason = e.errors && e.errors[0] && e.errors[0].reason;
-        why = (reason ? reason + ": " : "") + (e.message || "");
-      } catch {}
-      throw new Error("YouTube said " + r.status + (why ? " (" + why.slice(0, 180) + ")" : ""));
-    }
-    return r.json();
-  };
-
-  let channelId = null, channelTitle = "";
-  const handle = q.startsWith("@") ? q : "@" + q.replace(/\s+/g, "");
-  if (/^@[A-Za-z0-9._-]{3,30}$/.test(handle)) {
-    const d = await yt("channels", { part: "id,snippet", forHandle: handle });
-    const c = d.items && d.items[0];
-    if (c) { channelId = c.id; channelTitle = c.snippet.title; }
-  }
-  if (!channelId) {
-    const d = await yt("search", { part: "snippet", type: "channel", q, maxResults: 1 });
-    const c = d.items && d.items[0];
-    if (!c) return { error: "No channel was found with that name." };
-    channelId = c.snippet.channelId || (c.id && c.id.channelId);
-    channelTitle = c.snippet.title || c.snippet.channelTitle || q;
-  }
-  if (!channelId) return { error: "No channel was found with that name." };
-
+  const hit = cacheGet("c:" + q.toLowerCase());
+  if (hit) return hit;
+  const found = await findChannel(env, q);
+  if (!found) return { error: "No channel was found with that name." };
   // Every channel has an "uploads" list whose id is the channel id with UC swapped for UU.
-  const v = await yt("playlistItems", { part: "snippet,contentDetails", playlistId: "UU" + channelId.slice(2), maxResults: 1 });
+  const v = await yt(env, "playlistItems", { part: "snippet,contentDetails", playlistId: "UU" + found.id.slice(2), maxResults: 1 });
   const item = v.items && v.items[0];
   if (!item) return { error: "That channel has no public videos." };
-  const value = {
-    channel: channelTitle,
-    title: item.snippet.title,
+  return cacheSet("c:" + q.toLowerCase(), {
+    channel: found.title,
+    title: decode(item.snippet.title),
     published: (item.contentDetails && item.contentDetails.videoPublishedAt) || item.snippet.publishedAt,
     url: "https://www.youtube.com/watch?v=" + item.contentDetails.videoId
-  };
-  if (videoCache.size > 200) videoCache.clear();
-  videoCache.set(q.toLowerCase(), { at: Date.now(), value });
-  return value;
+  });
+}
+
+async function searchVideos(env, query, channel) {
+  if (!env.YOUTUBE_API_KEY) return { error: "YouTube lookup is not set up yet." };
+  const q = String(query || "").trim().slice(0, 120);
+  if (!q) return { error: "No search words were given." };
+  const ch = String(channel || "").trim().slice(0, 80);
+  const key = "s:" + q.toLowerCase() + "|" + ch.toLowerCase();
+  const hit = cacheGet(key);
+  if (hit) return hit;
+  // Only videos that can be played inside the site, and a moderate safe-search filter.
+  const params = { part: "snippet", type: "video", q, maxResults: 3, safeSearch: "moderate", videoEmbeddable: "true" };
+  if (ch) {
+    const found = await findChannel(env, ch);
+    if (!found) return { error: "No channel was found with that name." };
+    params.channelId = found.id;
+  }
+  const d = await yt(env, "search", params);
+  const results = (d.items || []).filter(i => i.id && i.id.videoId).map(i => ({
+    title: decode(i.snippet.title),
+    channel: decode(i.snippet.channelTitle),
+    published: i.snippet.publishedAt,
+    url: "https://www.youtube.com/watch?v=" + i.id.videoId
+  }));
+  if (!results.length) return { error: "No videos matched that search." };
+  return cacheSet(key, { results });
 }
 
 async function runTool(env, use) {
   try {
-    if (use.name === "latest_youtube_video") return await latestVideo(env, use.input && use.input.channel);
+    const input = use.input || {};
+    if (use.name === "latest_youtube_video") return await latestVideo(env, input.channel);
+    if (use.name === "search_youtube_videos") return await searchVideos(env, input.query, input.channel);
   } catch (e) {
     console.error("YouTube lookup failed:", e && e.message);
-    return { error: "The YouTube lookup failed. " + (e && e.message ? e.message : "") };
+    return { error: "I couldn't look that up right now. Try again in a bit." };
   }
   return { error: "Unknown tool." };
 }
