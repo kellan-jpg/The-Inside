@@ -997,10 +997,13 @@
     vault.hidden = false;
     inside.hidden = true;
     document.title = "Welcome";
-    document.getElementById("agree").focus();
+    if (resume && resume.view !== 'vault') restore();
+    else { resume = null; document.getElementById("agree").focus(); }
   }
 
   function lock() {
+    const st = snapshot();
+    if (st) { resume = st; freezeFrames(); }
     vault.hidden = true;
     inside.hidden = true;
     page.hidden = true;
@@ -1313,7 +1316,12 @@
         };
         search.addEventListener('input', () => show(search.value));
         show('');
-        home.append(search, list);
+        const more = el('p', 'disclaimer');
+        more.append('Want more games? ');
+        const goReq = el('button', 'linkbtn', 'Go to Requests');
+        goReq.addEventListener('click', () => showTab('requests'));
+        more.append(goReq, ' and ask for the ones you want.');
+        home.append(search, list, more);
         root.append(home, player);
       }
     },
@@ -1568,6 +1576,35 @@
   });
   document.getElementById('back').addEventListener('click', back);
   document.getElementById('lock3').addEventListener('click', lock);
+
+  // ---- Pick up where you left off ----
+  // Locking still hides everything behind the calculator. This only remembers which screen you were on
+  // (in memory, never saved to disk), so entering the code again takes you back to it.
+  let resume = null;
+  function snapshot() {
+    if (!page.hidden) return { view: 'page', y: page.scrollTop };
+    if (!inside.hidden) return { view: 'inside', y: inside.scrollTop };
+    if (!vault.hidden) return { view: 'vault', y: 0 };
+    return null;
+  }
+  // Videos and games stop while locked, so nothing keeps playing behind the calculator.
+  function freezeFrames() {
+    pageBody.querySelectorAll('iframe').forEach(f => {
+      if (f.src && f.src !== 'about:blank') { f.dataset.src = f.src; f.src = 'about:blank'; }
+    });
+  }
+  function thawFrames() {
+    pageBody.querySelectorAll('iframe').forEach(f => {
+      if (f.dataset.src) { f.src = f.dataset.src; delete f.dataset.src; }
+    });
+  }
+  function restore() {
+    const r = resume;
+    resume = null;
+    vault.hidden = true; inside.hidden = true; page.hidden = true;
+    if (r.view === 'page') { page.hidden = false; thawFrames(); page.scrollTop = r.y; page.focus(); }
+    else { inside.hidden = false; inside.scrollTop = r.y; inside.focus(); loadUpdates(); }
+  }
 
   function enter() {
     vault.hidden = true;
