@@ -76,13 +76,22 @@ async function latestVideo(env, channel) {
     const u = new URL("https://www.googleapis.com/youtube/v3/" + path);
     Object.entries({ ...params, key }).forEach(([k, v]) => u.searchParams.set(k, v));
     const r = await fetch(u);
-    if (!r.ok) throw new Error("youtube " + r.status);
+    if (!r.ok) {
+      let why = "";
+      try {
+        const e = (await r.json()).error || {};
+        const reason = e.errors && e.errors[0] && e.errors[0].reason;
+        why = (reason ? reason + ": " : "") + (e.message || "");
+      } catch {}
+      throw new Error("YouTube said " + r.status + (why ? " (" + why.slice(0, 180) + ")" : ""));
+    }
     return r.json();
   };
 
   let channelId = null, channelTitle = "";
-  if (q.startsWith("@")) {
-    const d = await yt("channels", { part: "id,snippet", forHandle: q });
+  const handle = q.startsWith("@") ? q : "@" + q.replace(/\s+/g, "");
+  if (/^@[A-Za-z0-9._-]{3,30}$/.test(handle)) {
+    const d = await yt("channels", { part: "id,snippet", forHandle: handle });
     const c = d.items && d.items[0];
     if (c) { channelId = c.id; channelTitle = c.snippet.title; }
   }
@@ -113,8 +122,9 @@ async function latestVideo(env, channel) {
 async function runTool(env, use) {
   try {
     if (use.name === "latest_youtube_video") return await latestVideo(env, use.input && use.input.channel);
-  } catch {
-    return { error: "The YouTube lookup failed. Try again in a bit." };
+  } catch (e) {
+    console.error("YouTube lookup failed:", e && e.message);
+    return { error: "The YouTube lookup failed. " + (e && e.message ? e.message : "") };
   }
   return { error: "Unknown tool." };
 }
