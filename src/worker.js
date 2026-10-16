@@ -242,6 +242,74 @@ async function updates(env) {
   return json({ updates: await res.json() });
 }
 
+// ---- Game leaderboards ----
+// For every game a LOWER score is better (fewer moves, faster time, fewer points the computer got).
+// Scores come from the player's browser, so these checks only block impossible numbers. They can't
+// stop someone determined to cheat. You can delete any row in the Supabase "scores" table.
+const GAME_RULES = {
+  tictactoe: { score: [3, 5], secs: [1, 900] },
+  memory: { score: [8, 150], secs: [6, 3600] },
+  minesweeper: { score: [2, 3600], secs: [2, 3600] },
+  pong: { score: [0, 6], secs: [12, 3600] },
+  chess: { score: [2, 200], secs: [3, 7200] }
+};
+
+// Basic name filter: ignores spacing, punctuation and number-for-letter swaps. It is not perfect.
+const BAD_WORDS = ["fuck", "shit", "bitch", "cunt", "dick", "cock", "pussy", "slut", "whore", "fag", "nigg", "retard", "rape", "nazi", "hitler", "porn", "sex", "penis", "vagina", "boob", "anal", "kkk"];
+function badName(name) {
+  const flat = name.toLowerCase()
+    .replace(/[0@]/g, "o").replace(/[1!|]/g, "i").replace(/3/g, "e").replace(/[4]/g, "a").replace(/[5$]/g, "s").replace(/7/g, "t")
+    .replace(/[^a-z]/g, "");
+  return BAD_WORDS.some(w => flat.includes(w));
+}
+
+async function topScores(env, game) {
+  const res = await supabase(env, "scores?game=eq." + game + "&select=name,score,seconds,created_at&order=score.asc,seconds.asc,created_at.asc&limit=60");
+  if (!res.ok) return null;
+  const rows = await res.json();
+  const seen = new Set(), out = [];
+  for (const r of rows) {              // best result per name
+    const k = String(r.name).toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+    if (out.length === 10) break;
+  }
+  return out;
+}
+
+async function getScores(url, env) {
+  const game = url.searchParams.get("game") || "";
+  if (!GAME_RULES[game]) return json({ error: "Unknown game." }, 400);
+  const scores = await topScores(env, game);
+  if (!scores) return json({ error: "The leaderboard isn't set up yet." }, 503);
+  return json({ scores });
+}
+
+async function postScore(request, env) {
+  const body = await readJson(request);
+  if (!body) return json({ error: "Bad request." }, 400);
+  const rules = GAME_RULES[body.game];
+  if (!rules) return json({ error: "Unknown game." }, 400);
+  const name = String(body.name || "").trim().replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 16 || !/^[A-Za-z0-9 _.-]+$/.test(name)) {
+    return json({ error: "Names need 2 to 16 letters, numbers or spaces." }, 400);
+  }
+  if (badName(name)) return json({ error: "Please pick a different name." }, 400);
+  const score = body.score, seconds = body.seconds;
+  const okNum = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
+  if (!okNum(score, rules.score) || !okNum(seconds, rules.secs)) {
+    return json({ error: "That result doesn't look right." }, 400);
+  }
+  const res = await supabase(env, "scores", {
+    method: "POST",
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ game: body.game, name, score, seconds })
+  });
+  if (!res.ok) return json({ error: "Couldn't save your score." }, 502);
+  return json({ ok: true });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -259,6 +327,11 @@ export default {
         return await submitRequest(request, env);
       }
       if (path === "/api/updates" && request.method === "GET") return await updates(env);
+      if (path === "/api/scores" && request.method === "GET") return await getScores(url, env);
+      if (path === "/api/score" && request.method === "POST") {
+        if (limited(ip + ":score", 3, 60000)) return json({ error: "Slow down a little." }, 429);
+        return await postScore(request, env);
+      }
       return json({ error: "Not found." }, 404);
     } catch {
       return json({ error: "Something went wrong." }, 500);
