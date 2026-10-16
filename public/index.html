@@ -476,6 +476,22 @@
 
   .msg.bot a { color: var(--vault-accent); word-break: break-all; }
   .msg .player { width: min(420px, 70vw); margin-top: 8px; }
+
+  /* ---------- Leaderboards and the win pop-up ---------- */
+  .board { padding-top: 6px; }
+  .board h3 { margin: 0 0 8px; font-size: 18px; font-weight: 500; }
+  .lb { list-style: none; margin: 0; padding: 0; counter-reset: r; }
+  .lb li { counter-increment: r; display: flex; gap: 10px; align-items: baseline; padding: 9px 10px; border-bottom: 1px solid var(--line); border-radius: 8px; }
+  .lb li::before { content: counter(r); width: 22px; color: var(--vault-muted); font-variant-numeric: tabular-nums; }
+  .lb li strong { flex: 1; font-weight: 500; overflow-wrap: anywhere; }
+  .lb li span { color: var(--vault-muted); font-size: 14px; white-space: nowrap; }
+  .lb li.me { background: var(--accent-soft); }
+  .modal { position: fixed; top: 0; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, 0.62); }
+  .modalcard { width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 22px; border: 1px solid var(--tile-border); border-radius: 16px; background: var(--vault-bg); color: var(--vault-text); }
+  .modalcard h2 { margin: 0; font-size: 26px; font-weight: 500; }
+  .modalcard p { margin: 0; line-height: 1.5; color: var(--vault-muted); min-height: 0; }
+  .modalcard input { font: inherit; font-size: 16px; color: var(--vault-text); background: var(--field-bg); border: 1px solid var(--field-border); border-radius: 12px; padding: 12px 14px; }
+  .modalcard .bar-form button.ghost { background: transparent; color: var(--vault-text); border: 1px solid var(--tile-border); }
 </style>
 </head>
 <body>
@@ -1004,6 +1020,8 @@
   function lock() {
     const st = snapshot();
     if (st) { resume = st; freezeFrames(); }
+    const wm = document.getElementById('winmodal');
+    if (wm) wm.remove();
     vault.hidden = true;
     inside.hidden = true;
     page.hidden = true;
@@ -1168,11 +1186,12 @@
   // Each tab is a title, a one-line intro, and a build() that fills its screen.
   // ---- Things you can edit ----
   const GOOGLE_CX = 'c436ba503289d469b';   // Paste your Google Programmable Search Engine ID here to turn on Blud Browser.
-  const GAMES = [         // Each game: a title, a url, and an optional thumb picture.
-    { title: 'Tic-Tac-Toe', url: '/games/tictactoe.html', thumb: '/games/thumbs/tictactoe.svg' },
-    { title: 'Memory Match', url: '/games/memory.html', thumb: '/games/thumbs/memory.svg' },
-    { title: 'Pong', url: '/games/pong.html', thumb: '/games/thumbs/pong.svg' },
-    { title: 'Minesweeper', url: '/games/minesweeper.html', thumb: '/games/thumbs/minesweeper.svg' }
+  const GAMES = [         // Each game: a title, a url, an optional thumb picture, and an id (only the built-in games have leaderboards).
+    { id: 'chess', title: 'Chess', url: '/games/chess.html', thumb: '/games/thumbs/chess.svg' },
+    { id: 'tictactoe', title: 'Tic-Tac-Toe', url: '/games/tictactoe.html', thumb: '/games/thumbs/tictactoe.svg' },
+    { id: 'memory', title: 'Memory Match', url: '/games/memory.html', thumb: '/games/thumbs/memory.svg' },
+    { id: 'pong', title: 'Pong', url: '/games/pong.html', thumb: '/games/thumbs/pong.svg' },
+    { id: 'minesweeper', title: 'Minesweeper', url: '/games/minesweeper.html', thumb: '/games/thumbs/minesweeper.svg' }
     // Games you host yourself (a folder inside public/games/):
     // { title: 'Game name', url: '/games/my-game/index.html', thumb: '/games/my-game/thumb.jpg' },
     // Games from a catalog provider use the link or embed address they give you:
@@ -1225,6 +1244,84 @@
     }
     node.append(text.slice(last));
   }
+
+  // ---- Leaderboards and the win pop-up ----
+  const fmtTime = n => Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+  const STAT = {
+    chess: r => r.score + ' moves, ' + fmtTime(r.seconds),
+    tictactoe: r => 'Won in ' + r.score + ' moves',
+    memory: r => r.score + ' moves, ' + fmtTime(r.seconds),
+    pong: r => '7 to ' + r.score + ', ' + fmtTime(r.seconds),
+    minesweeper: r => fmtTime(r.seconds)
+  };
+  let boardCtx = null; // the leaderboard under the game that is open right now
+
+  async function renderBoard(node, id, mine) {
+    node.textContent = '';
+    node.append(el('h3', '', 'Leaderboard'));
+    const fail = text => node.append(el('p', 'disclaimer', text));
+    try {
+      const r = await fetch('/api/scores?game=' + encodeURIComponent(id), { cache: 'no-store' });
+      const d = await r.json();
+      if (!r.ok || !Array.isArray(d.scores)) throw new Error('no board');
+      if (!d.scores.length) { fail('No winners yet. Be the first!'); return; }
+      const list = el('ol', 'lb');
+      d.scores.forEach(row => {
+        const li = el('li');
+        if (mine && row.name === mine.name && row.score === mine.score && row.seconds === mine.seconds) li.className = 'me';
+        li.append(el('strong', '', row.name), el('span', '', STAT[id](row)));
+        list.append(li);
+      });
+      node.append(list);
+    } catch (e) { fail("The leaderboard isn't available right now."); }
+  }
+
+  function showWin(d) {
+    const score = Math.round(Number(d.score)), seconds = Math.round(Number(d.seconds));
+    if (!boardCtx || boardCtx.id !== d.game || !STAT[d.game] || !isFinite(score) || !isFinite(seconds)) return;
+    if (document.getElementById('winmodal')) return;
+    const wrap = el('div', 'modal');
+    wrap.id = 'winmodal';
+    const card = el('div', 'modalcard');
+    const input = el('input');
+    input.placeholder = 'Your name';
+    input.maxLength = 16;
+    input.value = load('name', '');
+    const note = el('p');
+    const add = el('button', '', 'Add to leaderboard');
+    const skip = el('button', 'ghost', 'No thanks');
+    const close = () => wrap.remove();
+    const submit = async () => {
+      const name = input.value.trim();
+      if (name.length < 2) { note.textContent = 'Type a name with at least 2 characters.'; return; }
+      add.disabled = true;
+      note.textContent = 'Saving...';
+      try {
+        const { ok, status, data } = await postJson('/api/score', { game: d.game, name, score, seconds });
+        if (!ok) throw new Error(status === 429 ? 'Please wait a moment before submitting again.' : (data.error || 'fail'));
+        save('name', name);
+        close();
+        if (boardCtx && boardCtx.id === d.game) renderBoard(boardCtx.node, d.game, { name, score, seconds });
+      } catch (e) {
+        note.textContent = e.message && e.message !== 'fail' && e.message !== 'Failed to fetch' ? e.message : "Couldn't save that right now. Try again.";
+        add.disabled = false;
+      }
+    };
+    add.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    skip.addEventListener('click', close);
+    const row = el('div', 'bar-form');
+    row.append(add, skip);
+    card.append(el('h2', '', 'You won!'), el('p', '', STAT[d.game]({ score, seconds })), el('p', '', 'Type your name to put it on the leaderboard.'), input, row, note);
+    wrap.append(card);
+    document.body.append(wrap);
+    input.focus();
+  }
+
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'inside-win' || !unlocked()) return;
+    showWin(e.data);
+  });
 
   function agoText(ts) {
     const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
@@ -1308,11 +1405,17 @@
           f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) {} });
           const bar = el('div', 'bar-form');
           const back = el('button', '', 'Back to games');
-          back.addEventListener('click', () => { player.textContent = ''; player.hidden = true; home.hidden = false; });
+          back.addEventListener('click', () => { boardCtx = null; player.textContent = ''; player.hidden = true; home.hidden = false; });
           const full = el('button', '', 'Full screen');
           full.addEventListener('click', () => { if (f.requestFullscreen) f.requestFullscreen(); });
           bar.append(back, el('strong', '', g.title), full);
           player.append(bar, f);
+          if (g.id) {
+            const board = el('div', 'board');
+            player.append(board);
+            boardCtx = { node: board, id: g.id };
+            renderBoard(board, g.id);
+          } else boardCtx = null;
         };
         search.addEventListener('input', () => show(search.value));
         show('');
