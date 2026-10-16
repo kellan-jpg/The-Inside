@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic-Tac-Toe</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0e13; color: #e8ecf1; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; }
+  #b { display: grid; grid-template-columns: repeat(3, 92px); gap: 8px; justify-content: center; }
+  #b button { width: 92px; height: 92px; font-size: 44px; font-weight: 600; border: 1px solid #232a36; border-radius: 14px; background: #10151d; color: #e8ecf1; cursor: pointer; }
+  #b button:disabled { cursor: default; }
+  #b button.x { color: #8fb8ff; }
+  p { margin: 14px 0 8px; color: #8b94a1; }
+  .again { font: inherit; font-size: 15px; font-weight: 500; padding: 9px 18px; border: 0; border-radius: 10px; background: #4b94ff; color: #04070c; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="b"></div>
+  <p id="m"></p>
+  <button class="again" id="r">New game</button>
+</div>
+<script>
+  const L = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const b = document.getElementById('b'), m = document.getElementById('m');
+  let s, done, moves = 0, t0 = 0;
+  const win = (s, p) => L.some(l => l.every(i => s[i] === p));
+
+  function reset() { s = Array(9).fill(''); done = false; moves = 0; t0 = 0; m.textContent = 'Your turn. You are X.'; draw(); }
+  function draw() {
+    b.textContent = '';
+    s.forEach((v, i) => {
+      const e = document.createElement('button');
+      e.textContent = v;
+      e.className = v.toLowerCase();
+      e.disabled = done || !!v;
+      e.setAttribute('aria-label', 'Square ' + (i + 1));
+      e.onclick = () => play(i);
+      b.append(e);
+    });
+  }
+  function end() {
+    if (win(s, 'X')) {
+      m.textContent = 'You win!'; done = true;
+      parent.postMessage({ type: 'inside-win', game: 'tictactoe', score: moves, seconds: Math.max(1, Math.round((Date.now() - t0) / 1000)) }, location.origin);
+    }
+    else if (win(s, 'O')) { m.textContent = 'The computer wins.'; done = true; }
+    else if (s.every(Boolean)) { m.textContent = "It's a draw."; done = true; }
+    return done;
+  }
+  function play(i) { if (done || s[i]) return; if (!t0) t0 = Date.now(); moves++; s[i] = 'X'; if (!end()) { move(); end(); } draw(); }
+  function move() {
+    const free = s.map((v, i) => (v ? -1 : i)).filter(i => i >= 0);
+    const find = p => free.find(i => { s[i] = p; const w = win(s, p); s[i] = ''; return w; });
+    let i = find('O');
+    if (i === undefined) i = find('X');
+    if (i === undefined) i = free.includes(4) ? 4 : free[Math.floor(Math.random() * free.length)];
+    s[i] = 'O';
+  }
+  document.getElementById('r').onclick = reset;
+  // Let the main site see key presses, so its return-to-calculator key still works.
+  addEventListener('keydown', e => parent.postMessage({ type: 'inside-key', key: e.key }, location.origin));
+  reset();
+</script>
+</body>
+</html>
