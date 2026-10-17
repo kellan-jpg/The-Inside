@@ -3,39 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#2e3238">
 <title>Calculator</title>
-<script>try { var sc = localStorage.getItem("inside:scheme"); if (sc === "pink" || sc === "cream") document.documentElement.dataset.scheme = sc; } catch (e) {}</script>
+<script>try { var sc = localStorage.getItem("inside:scheme"); if (["light", "pink", "cream", "forest", "sunset"].indexOf(sc) > -1) document.documentElement.dataset.scheme = sc; } catch (e) {}</script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&family=IBM+Plex+Sans:wght@400;500&family=VT323&display=swap">
 <style>
   :root {
-    --page: #e4e7ec;
-    --body: #f8f9fb;
-    --body-edge: #ccd2dc;
-    --body-shadow: rgba(20, 28, 40, 0.16);
-    --screen: #0b0e13;
-    --screen-edge: #1b2029;
+    --page: #2e3238;
+    --body: #12151b;
+    --body-edge: #262b34;
+    --body-shadow: rgba(0, 0, 0, 0.7);
+    --screen: #04060a;
+    --screen-edge: #1c212a;
     --screen-text: #f5f7fa;
     --screen-muted: #7b8594;
-    --sheen: rgba(255, 255, 255, 0.9);
-    --key-hi: #ffffff;
-    --key-lo: #f0f2f6;
-    --key-edge: #d0d6df;
-    --key-text: #14181f;
-    --key-shadow: rgba(20, 28, 40, 0.14);
-    --fn-hi: #e8ebf0;
-    --fn-lo: #dce0e7;
-    --fn-edge: #c2c8d2;
-    --fn-text: #364050;
-    --op-hi: #eaf1ff;
-    --op-lo: #dbe8fd;
-    --op-edge: #bfd3f7;
-    --op-text: #1c63e6;
+    --sheen: rgba(255, 255, 255, 0.08);
+    --key-hi: #2b3039;
+    --key-lo: #22262e;
+    --key-edge: #14171c;
+    --key-text: #f1f3f6;
+    --key-shadow: rgba(0, 0, 0, 0.6);
+    --fn-hi: #4c535f;
+    --fn-lo: #414853;
+    --fn-edge: #272c33;
+    --fn-text: #f1f3f6;
+    --op-hi: #1f3459;
+    --op-lo: #172846;
+    --op-edge: #0e1b33;
+    --op-text: #72b3ff;
     --eq-hi: #4b94ff;
     --eq-lo: #1f66e8;
     --eq-edge: #1550c0;
     --eq-text: #ffffff;
-    --act-bg: #1c63e6;
-    --act-text: #ffffff;
+    --act-bg: #ffffff;
+    --act-text: #1c63e6;
     --focus: #2f7cf6;
     --vault-bg: #07090d;
     --vault-text: #f5f7fa;
@@ -58,56 +60,7 @@
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --page: #2e3238;
-      --body: #12151b;
-      --body-edge: #262b34;
-      --body-shadow: rgba(0, 0, 0, 0.7);
-      --screen: #04060a;
-      --screen-edge: #1c212a;
-      --sheen: rgba(255, 255, 255, 0.08);
-      --key-hi: #2b3039;
-      --key-lo: #22262e;
-      --key-edge: #14171c;
-      --key-text: #f1f3f6;
-      --key-shadow: rgba(0, 0, 0, 0.6);
-      --fn-hi: #4c535f;
-      --fn-lo: #414853;
-      --fn-edge: #272c33;
-      --fn-text: #f1f3f6;
-      --op-hi: #1f3459;
-      --op-lo: #172846;
-      --op-edge: #0e1b33;
-      --op-text: #72b3ff;
-      --act-bg: #ffffff;
-      --act-text: #1c63e6;
-    }
-  }
-  :root[data-theme="dark"] {
-    --page: #2e3238;
-    --body: #12151b;
-    --body-edge: #262b34;
-    --body-shadow: rgba(0, 0, 0, 0.7);
-    --screen: #04060a;
-    --screen-edge: #1c212a;
-    --sheen: rgba(255, 255, 255, 0.08);
-    --key-hi: #2b3039;
-    --key-lo: #22262e;
-    --key-edge: #14171c;
-    --key-text: #f1f3f6;
-    --key-shadow: rgba(0, 0, 0, 0.6);
-    --fn-hi: #4c535f;
-    --fn-lo: #414853;
-    --fn-edge: #272c33;
-    --fn-text: #f1f3f6;
-    --op-hi: #1f3459;
-    --op-lo: #172846;
-    --op-edge: #0e1b33;
-    --op-text: #72b3ff;
-    --act-bg: #ffffff;
-    --act-text: #1c63e6;
+    color-scheme: dark;
   }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
   *, *::before, *::after { box-sizing: border-box; }
@@ -235,7 +188,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: reveal 0.5s ease both;
+    
   }
   .vault-inner { max-width: 460px; }
   .vault h1 { margin: 0 0 12px; font-size: 34px; font-weight: 500; letter-spacing: -0.01em; }
@@ -274,7 +227,7 @@
     background: var(--inside-bg);
     color: var(--vault-text);
     outline: none;
-    animation: reveal 0.5s ease both;
+    
   }
   .bar {
     position: sticky;
@@ -371,7 +324,7 @@
 
   /* Color scheme picker */
   .scheme { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
-  .seg { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: var(--field-bg); border: 1px solid var(--field-border); }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; border-radius: 12px; background: var(--field-bg); border: 1px solid var(--field-border); }
   .seg button { appearance: none; border: 0; background: transparent; color: var(--vault-muted); font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 9px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--vault-accent); color: var(--on-accent); }
   .seg button:focus-visible { outline: 2px solid var(--vault-accent); outline-offset: 2px; }
@@ -388,7 +341,7 @@
     --sheen: rgba(255, 255, 255, 0.85);
     --key-hi: #fff8fb; --key-lo: #ffeaf2; --key-edge: #f0b0c9; --key-text: #5a1f3a; --key-shadow: rgba(160, 40, 90, 0.22);
     --fn-hi: #ffd0e1; --fn-lo: #ffbcd3; --fn-edge: #ec9dbb; --fn-text: #7a2a4f;
-    --op-hi: #ffdbe8; --op-lo: #ffc6db; --op-edge: #f099b9; --op-text: #c92a64;
+    --op-hi: #ffdbe8; --op-lo: #ffc6db; --op-edge: #f099b9; --op-text: #a81c52;
     --eq-hi: #f5649a; --eq-lo: #d6336c; --eq-edge: #a8224f; --eq-text: #ffffff;
     --act-bg: #c92a64; --act-text: #ffffff; --focus: #d6336c;
     --vault-bg: #ffd9e6; --vault-text: #4a1a30; --vault-muted: #8f4a69; --vault-accent: #c92a64;
@@ -468,7 +421,7 @@
   .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--vault-accent); text-decoration: underline; cursor: pointer; }
   .linkbtn:focus-visible { outline: 2px solid var(--vault-accent); outline-offset: 2px; }
 
-  .pageframe { display: block; width: 100%; height: 72vh; min-height: 360px; border: 0; border-radius: 14px; background: #fff; }
+  .pageframe { display: block; width: 100%; height: 72vh; min-height: 360px; border: 0; border-radius: 14px; background: #0b0e13; }
 
   .bar-form { flex-wrap: wrap; }
   .bar-form strong { min-width: 120px; }
@@ -492,6 +445,163 @@
   .modalcard p { margin: 0; line-height: 1.5; color: var(--vault-muted); min-height: 0; }
   .modalcard input { font: inherit; font-size: 16px; color: var(--vault-text); background: var(--field-bg); border: 1px solid var(--field-border); border-radius: 12px; padding: 12px 14px; }
   .modalcard .bar-form button.ghost { background: transparent; color: var(--vault-text); border: 1px solid var(--tile-border); }
+
+  /* ---------- More color schemes (the Dark one is the default, set on :root) ---------- */
+  :root[data-scheme="light"] {
+    --page: #e4e7ec;
+    --body: #f8f9fb;
+    --body-edge: #ccd2dc;
+    --body-shadow: rgba(20, 28, 40, 0.16);
+    --screen: #0b0e13;
+    --screen-edge: #1b2029;
+    --screen-text: #f5f7fa;
+    --screen-muted: #7b8594;
+    --sheen: rgba(255, 255, 255, 0.9);
+    --key-hi: #ffffff;
+    --key-lo: #f0f2f6;
+    --key-edge: #d0d6df;
+    --key-text: #14181f;
+    --key-shadow: rgba(20, 28, 40, 0.14);
+    --fn-hi: #e8ebf0;
+    --fn-lo: #dce0e7;
+    --fn-edge: #c2c8d2;
+    --fn-text: #364050;
+    --op-hi: #eaf1ff;
+    --op-lo: #dbe8fd;
+    --op-edge: #bfd3f7;
+    --op-text: #1c63e6;
+    --eq-hi: #4b94ff;
+    --eq-lo: #1f66e8;
+    --eq-edge: #1550c0;
+    --eq-text: #ffffff;
+    --act-bg: #1c63e6;
+    --act-text: #ffffff;
+    --focus: #2f7cf6;
+    --vault-bg: #f1f4f9;
+    --vault-text: #14181f;
+    --vault-muted: #5b6573;
+    --vault-accent: #1c63e6;
+    --inside-bg: #ffffff;
+    --bar-bg: rgba(255, 255, 255, 0.92);
+    --line: #dfe3ea;
+    --tile-border: #d3d9e2;
+    --tile-a: #ffffff;
+    --tile-b: #eef2f8;
+    --tile-hi-a: #5b9dff;
+    --tile-hi-b: #2f7cf6;
+    --tile-hi-text: #06142e;
+    --switch-off: #cfd6e0;
+    --field-bg: #ffffff;
+    --field-border: #cfd6e0;
+    --on-accent: #ffffff;
+    --accent-soft: rgba(28, 99, 230, 0.1);
+    color-scheme: light;
+  }
+  :root[data-scheme="forest"] {
+    --page: #0b1511;
+    --body: #101d17;
+    --body-edge: #1f3a2d;
+    --body-shadow: rgba(0, 0, 0, 0.6);
+    --screen: #07100c;
+    --screen-edge: #1a3024;
+    --screen-text: #eafff3;
+    --screen-muted: #86b59c;
+    --sheen: rgba(255, 255, 255, 0.08);
+    --key-hi: #1d3328;
+    --key-lo: #162a20;
+    --key-edge: #0c1812;
+    --key-text: #e8f6ee;
+    --key-shadow: rgba(0, 0, 0, 0.55);
+    --fn-hi: #2f4a3c;
+    --fn-lo: #263d31;
+    --fn-edge: #17281f;
+    --fn-text: #e8f6ee;
+    --op-hi: #1f4a35;
+    --op-lo: #17382a;
+    --op-edge: #0f2519;
+    --op-text: #6ee7a8;
+    --eq-hi: #3fcf85;
+    --eq-lo: #1fa862;
+    --eq-edge: #137a46;
+    --eq-text: #04140b;
+    --act-bg: #6ee7a8;
+    --act-text: #04140b;
+    --focus: #3fcf85;
+    --vault-bg: #0a1410;
+    --vault-text: #e8f6ee;
+    --vault-muted: #86b59c;
+    --vault-accent: #3fcf85;
+    --inside-bg: #08110d;
+    --bar-bg: rgba(8, 17, 13, 0.92);
+    --line: #1a3024;
+    --tile-border: #1f3a2d;
+    --tile-a: #12231b;
+    --tile-b: #0b1510;
+    --tile-hi-a: #3fcf85;
+    --tile-hi-b: #1d8f55;
+    --tile-hi-text: #03140a;
+    --switch-off: #2a4638;
+    --field-bg: #0b1510;
+    --field-border: #1f3a2d;
+    --on-accent: #03140a;
+    --accent-soft: rgba(63, 207, 133, 0.12);
+    --lcd-bg: #c8e6cf;
+    --lcd-text: #0e2417;
+    color-scheme: dark;
+  }
+  :root[data-scheme="sunset"] {
+    --page: #1a1020;
+    --body: #231430;
+    --body-edge: #3d2552;
+    --body-shadow: rgba(0, 0, 0, 0.6);
+    --screen: #12081a;
+    --screen-edge: #30194a;
+    --screen-text: #fff3ea;
+    --screen-muted: #c79ab8;
+    --sheen: rgba(255, 255, 255, 0.08);
+    --key-hi: #3a2350;
+    --key-lo: #2d1a40;
+    --key-edge: #1a0e26;
+    --key-text: #f6ecf8;
+    --key-shadow: rgba(0, 0, 0, 0.55);
+    --fn-hi: #55386f;
+    --fn-lo: #462d5c;
+    --fn-edge: #2a1a3b;
+    --fn-text: #f6ecf8;
+    --op-hi: #5a2f3f;
+    --op-lo: #482333;
+    --op-edge: #2e1420;
+    --op-text: #ffae7a;
+    --eq-hi: #ff9a5a;
+    --eq-lo: #f06a3a;
+    --eq-edge: #b84a22;
+    --eq-text: #1a0a10;
+    --act-bg: #ffae7a;
+    --act-text: #1a0a10;
+    --focus: #ff9a5a;
+    --vault-bg: #1d1127;
+    --vault-text: #f6ecf8;
+    --vault-muted: #c79ab8;
+    --vault-accent: #ff9a5a;
+    --inside-bg: #160c1e;
+    --bar-bg: rgba(22, 12, 30, 0.92);
+    --line: #30194a;
+    --tile-border: #3d2552;
+    --tile-a: #2a1a3c;
+    --tile-b: #1a0e26;
+    --tile-hi-a: #ff9a5a;
+    --tile-hi-b: #d8517c;
+    --tile-hi-text: #1a0a10;
+    --switch-off: #4a3360;
+    --field-bg: #190d24;
+    --field-border: #3d2552;
+    --on-accent: #1a0a10;
+    --accent-soft: rgba(255, 154, 90, 0.13);
+    --lcd-bg: #f3d9c8;
+    --lcd-text: #2a1020;
+    color-scheme: dark;
+  }
+  :root[data-scheme="pink"], :root[data-scheme="cream"] { color-scheme: light; }
 </style>
 </head>
 <body>
@@ -1040,7 +1150,7 @@
   }
 
   let soundOn = load('sound', '1') !== '0';
-  let scheme = ['pink', 'cream'].includes(load('scheme', '')) ? load('scheme', '') : '';
+  let scheme = ['light', 'pink', 'cream', 'forest', 'sunset'].includes(load('scheme', '')) ? load('scheme', '') : '';
   let audioCtx = null;
 
   function applyScheme(v) {
@@ -1154,7 +1264,7 @@
     const wrap = el('div', 'scheme');
     wrap.append(el('span', '', 'Color scheme'));
     const seg = el('div', 'seg');
-    [['', 'Off'], ['pink', 'Pink'], ['cream', 'Cream']].forEach(([val, label]) => {
+    [['', 'Dark'], ['light', 'Light'], ['pink', 'Pink'], ['cream', 'Cream'], ['forest', 'Forest'], ['sunset', 'Sunset']].forEach(([val, label]) => {
       const b = el('button', '', label);
       b.setAttribute('aria-pressed', String(val === scheme));
       b.addEventListener('click', () => {
@@ -1204,6 +1314,9 @@
   ];
 
   // Bludle replies: links you can click, and a Watch here button that plays a YouTube link in the chat.
+  // Bludle's conversation lives here (in memory only), so it survives switching tabs and locking.
+  // Reloading the page clears it.
+  const chatState = { convo: [], items: [{ who: 'bot', text: "Hi, I'm Bludle. Ask me anything." }], busy: false };
   const COOLDOWN_MSG = 'Please wait a 10 second cooldown before sending another message.';
   function ytIdOf(u) {
     const m = String(u).trim().match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
@@ -1555,10 +1668,14 @@
     ai: {
       title: 'Bludle', intro: 'Ask anything.',
       build(root) {
-        const convo = [];
-        let busy = false;
-        const log = el('div', 'chat');
-        log.append(el('div', 'msg bot', "Hi, I'm Bludle. Ask me anything."));
+        const convo = chatState.convo;
+        const st = chatState;
+                const log = el('div', 'chat');
+        chatState.items.forEach(it => {
+          const n = el('div', 'msg ' + it.who);
+          if (it.who === 'bot') renderReply(n, it.text); else n.textContent = it.text;
+          log.append(n);
+        });
         const form = el('div', 'bar-form');
         const input = el('input');
         input.placeholder = 'Message';
@@ -1566,25 +1683,37 @@
         const btn = el('button', '', 'Send');
         const send = async () => {
           const v = input.value.trim();
-          if (!v || busy) return;
-          busy = true;
+          if (!v || st.busy) return;
+          st.busy = true;
           input.value = '';
           log.append(el('div', 'msg me', v));
+          st.items.push({ who: 'me', text: v });
           const wait = el('div', 'msg bot', '...');
           log.append(wait);
           convo.push({ role: 'user', content: v });
           try {
             const { ok, status, data } = await postJson('/api/chat', { messages: convo });
-            if (ok && data.reply) { renderReply(wait, data.reply); convo.push({ role: 'assistant', content: data.reply }); }
-            else { wait.textContent = status === 429 ? COOLDOWN_MSG : (data.error || "Bludle isn't connected yet."); convo.pop(); }
-          } catch (e) { wait.textContent = "Bludle isn't connected yet."; convo.pop(); }
-          busy = false;
+            if (ok && data.reply) { renderReply(wait, data.reply); convo.push({ role: 'assistant', content: data.reply }); st.items.push({ who: 'bot', text: data.reply }); }
+            else { wait.textContent = status === 429 ? COOLDOWN_MSG : (data.error || "Bludle isn't connected yet."); convo.pop(); st.items.pop(); }
+          } catch (e) { wait.textContent = "Bludle isn't connected yet."; convo.pop(); st.items.pop(); }
+          st.busy = false;
           wait.scrollIntoView({ block: 'nearest' });
         };
         btn.addEventListener('click', send);
         input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
         form.append(input, btn);
         const warn = el('p', 'disclaimer', 'Heads up: if you send messages too quickly, Bludle makes you wait a 10 second cooldown.');
+        const newChat = el('button', 'linkbtn', 'Start a new chat');
+        newChat.addEventListener('click', () => {
+          if (st.busy) return;
+          convo.length = 0;
+          st.items.length = 1;
+          log.textContent = '';
+          const n = el('div', 'msg bot');
+          renderReply(n, st.items[0].text);
+          log.append(n);
+        });
+        warn.append(' Want a fresh start? ', newChat);
         root.append(log, form, warn);
       }
     },
