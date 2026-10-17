@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Chess</title>
+<style>
+  html { background: #0b0e13; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0e13; color: #e8ecf1; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; padding: 8px; }
+  #bd { --sq: min(11vw, 54px); display: grid; grid-template-columns: repeat(8, var(--sq)); width: calc(var(--sq) * 8); margin: 0 auto; border: 2px solid #232a36; border-radius: 8px; overflow: hidden; }
+  .sq { width: var(--sq); height: var(--sq); padding: 0; border: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--sq) * 0.78); line-height: 1; cursor: pointer; position: relative; }
+  .sq.l { background: #c9d4e6; }
+  .sq.d { background: #5d7aa6; }
+  .sq.last { box-shadow: inset 0 0 0 3px rgba(255, 214, 102, 0.7); }
+  .sq.sel { background: #f2d36b; }
+  .sq.chk { background: #e05757; }
+  .sq.tg::after { content: ''; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(20, 30, 50, 0.4); }
+  .sq.tg.cp::after { width: 84%; height: 84%; background: none; border: 4px solid rgba(20, 30, 50, 0.4); }
+  .sq span { display: flex; width: 86%; height: 86%; pointer-events: none; }
+  .sq svg { width: 100%; height: 100%; }
+  .pw svg * { fill: #f5f7fa; stroke: #10151d; stroke-width: 1.7; stroke-linejoin: round; }
+  .pb svg * { fill: #1b2230; stroke: #e8ecf1; stroke-width: 1.5; stroke-linejoin: round; }
+  .pw svg .n, .pb svg .n { fill: none; }
+  .pw svg .e { fill: #10151d; stroke: none; }
+  .pb svg .e { fill: #e8ecf1; stroke: none; }
+  p { margin: 10px 8px 6px; color: #8b94a1; min-height: 20px; }
+  .again { font: inherit; font-size: 15px; font-weight: 500; padding: 9px 18px; border: 0; border-radius: 10px; background: #4b94ff; color: #04070c; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="bd"></div>
+  <p id="m"></p>
+  <button class="again" id="r">New game</button>
+</div>
+<script>
+  // ENGINE START
+  const START = 'rnbqkbnrpppppppp' + '.'.repeat(32) + 'PPPPPPPPRNBQKBNR';
+  const isW = p => p >= 'A' && p <= 'Z';
+  const KN = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+  const KG = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+  const DG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  const ST = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  function newState() {
+    return { b: START.split(''), turn: 'w', castle: { K: true, Q: true, k: true, q: true }, ep: -1, half: 0, full: 1 };
+  }
+  // Is square sq attacked by the side "by" ('w' or 'b')?
+  function attacked(b, sq, by) {
+    const r = sq >> 3, c = sq & 7, w = by === 'w';
+    const pr = w ? r + 1 : r - 1, pawn = w ? 'P' : 'p';
+    for (const dc of [-1, 1]) {
+      const cc = c + dc;
+      if (pr >= 0 && pr < 8 && cc >= 0 && cc < 8 && b[pr * 8 + cc] === pawn) return true;
+    }
+    const near = (list, piece) => list.some(([dr, dc]) => {
+      const rr = r + dr, cc = c + dc;
+      return rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr * 8 + cc] === piece;
+    });
+    if (near(KN, w ? 'N' : 'n') || near(KG, w ? 'K' : 'k')) return true;
+    const ray = (dirs, a, q) => dirs.some(([dr, dc]) => {
+      let rr = r + dr, cc = c + dc;
+      while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+        const p = b[rr * 8 + cc];
+        if (p !== '.') return p === a || p === q;
+        rr += dr; cc += dc;
+      }
+      return false;
+    });
+    return ray(DG, w ? 'B' : 'b', w ? 'Q' : 'q') || ray(ST, w ? 'R' : 'r', w ? 'Q' : 'q');
+  }
+  function pseudo(s) {
+    const { b, turn, castle, ep } = s, white = turn === 'w', enemy = white ? 'b' : 'w', out = [];
+    for (let i = 0; i < 64; i++) {
+      const p = b[i];
+      if (p === '.' || isW(p) !== white) continue;
+      const r = i >> 3, c = i & 7, t = p.toLowerCase();
+      const add = (to, extra) => out.push({ from: i, to, p, cap: b[to] !== '.' ? b[to] : '', ...extra });
+      if (t === 'p') {
+        const dir = white ? -1 : 1, start = white ? 6 : 1, lastRow = white ? 0 : 7, r1 = r + dir;
+        if (r1 >= 0 && r1 < 8) {
+          if (b[r1 * 8 + c] === '.') {
+            if (r1 === lastRow) for (const pr of 'qrbn') add(r1 * 8 + c, { promo: pr });
+            else {
+              add(r1 * 8 + c);
+              if (r === start && b[(r + 2 * dir) * 8 + c] === '.') add((r + 2 * dir) * 8 + c, { dbl: true });
+            }
+          }
+          for (const dc of [-1, 1]) {
+            const cc = c + dc;
+            if (cc < 0 || cc > 7) continue;
+            const to = r1 * 8 + cc;
+            if (b[to] !== '.' && isW(b[to]) !== white) {
+              if (r1 === lastRow) for (const pr of 'qrbn') add(to, { promo: pr });
+              else add(to);
+            } else if (to === ep) add(to, { enp: true, cap: white ? 'p' : 'P' });
+          }
+        }
+      } else if (t === 'n' || t === 'k') {
+        for (const [dr, dc] of t === 'n' ? KN : KG) {
+          const rr = r + dr, cc = c + dc;
+          if (rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+          const q = b[rr * 8 + cc];
+          if (q === '.' || isW(q) !== white) add(rr * 8 + cc);
+        }
+        const home = white ? 60 : 4;
+        if (t === 'k' && i === home && !attacked(b, i, enemy)) {
+          const rook = white ? 'R' : 'r';
+          if (castle[white ? 'K' : 'k'] && b[home + 1] === '.' && b[home + 2] === '.' && b[home + 3] === rook &&
+              !attacked(b, home + 1, enemy) && !attacked(b, home + 2, enemy)) add(home + 2, { castle: 'K' });
+          if (castle[white ? 'Q' : 'q'] && b[home - 1] === '.' && b[home - 2] === '.' && b[home - 3] === '.' && b[home - 4] === rook &&
+              !attacked(b, home - 1, enemy) && !attacked(b, home - 2, enemy)) add(home - 2, { castle: 'Q' });
+        }
+      } else {
+        for (const [dr, dc] of t === 'b' ? DG : t === 'r' ? ST : DG.concat(ST)) {
+          let rr = r + dr, cc = c + dc;
+          while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+            const q = b[rr * 8 + cc];
+            if (q === '.') add(rr * 8 + cc);
+            else { if (isW(q) !== white) add(rr * 8 + cc); break; }
+            rr += dr; cc += dc;
+          }
+        }
+      }
+    }
+    return out;
+  }
+  function apply(s, m) {
+    const b = s.b.slice();
+    b[m.from] = '.';
+    b[m.to] = m.promo ? (isW(m.p) ? m.promo.toUpperCase() : m.promo) : m.p;
+    if (m.enp) b[(m.from >> 3) * 8 + (m.to & 7)] = '.';
+    if (m.castle === 'K') { b[m.from + 1] = b[m.from + 3]; b[m.from + 3] = '.'; }
+    if (m.castle === 'Q') { b[m.from - 1] = b[m.from - 4]; b[m.from - 4] = '.'; }
+    const c = { ...s.castle };
+    if (m.p === 'K') { c.K = false; c.Q = false; }
+    if (m.p === 'k') { c.k = false; c.q = false; }
+    for (const sq of [m.from, m.to]) {
+      if (sq === 63) c.K = false;
+      if (sq === 56) c.Q = false;
+      if (sq === 7) c.k = false;
+      if (sq === 0) c.q = false;
+    }
+    return {
+      b, turn: s.turn === 'w' ? 'b' : 'w', castle: c, ep: m.dbl ? (m.from + m.to) / 2 : -1,
+      half: m.p.toLowerCase() === 'p' || m.cap ? 0 : s.half + 1, full: s.full + (s.turn === 'b' ? 1 : 0)
+    };
+  }
+  const kingSq = (b, color) => b.indexOf(color === 'w' ? 'K' : 'k');
+  const inCheck = s => attacked(s.b, kingSq(s.b, s.turn), s.turn === 'w' ? 'b' : 'w');
+  function legal(s) {
+    const me = s.turn, them = me === 'w' ? 'b' : 'w';
+    return pseudo(s).filter(m => { const n = apply(s, m); return !attacked(n.b, kingSq(n.b, me), them); });
+  }
+  function status(s) {
+    if (!legal(s).length) return inCheck(s) ? 'checkmate' : 'stalemate';
+    if (s.half >= 100) return 'draw';
+    const rest = s.b.filter(p => p !== '.' && p.toLowerCase() !== 'k');
+    if (!rest.length || (rest.length === 1 && 'nb'.includes(rest[0].toLowerCase()))) return 'draw';
+    return 'playing';
+  }
+  // The bot: it looks two moves ahead (its move, then your reply) and counts material, so it will not
+  // hand you free pieces or miss a one-move checkmate. It cannot plan further than that, so forks,
+  // pins and slow attacks beat it. It also plays a purely random move now and then, and picks
+  // randomly between moves that look about equal, so it is a fair challenge rather than a machine.
+  const BLUNDER = 0.1;   // chance of a random move
+  const SLOP = 25;       // moves within this many centipawns of the best count as "about equal"
+  const PV = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
+  const rand = list => list[Math.floor(Math.random() * list.length)];
+  function evaluate(s) {          // score for the side to move
+    let v = 0;
+    for (let i = 0; i < 64; i++) {
+      const p = s.b[i];
+      if (p === '.') continue;
+      const t = p.toLowerCase(), w = isW(p), r = i >> 3, c = i & 7;
+      const cen = 3.5 - Math.max(Math.abs(c - 3.5), Math.abs(r - 3.5));   // 3 in the middle, 0 on the edge
+      let x = PV[t];
+      if (t === 'n' || t === 'b') x += 6 * cen;
+      if (t === 'p') x += 5 * (w ? 6 - r : r - 1) + 2 * cen;
+      v += w ? x : -x;
+    }
+    return s.turn === 'w' ? v : -v;
+  }
+  function search(s, depth, alpha, beta) {
+    const ms = legal(s);
+    if (!ms.length) return inCheck(s) ? -100000 - depth : 0;
+    if (depth === 0) return evaluate(s);
+    let best = -Infinity;
+    for (const m of ms) {
+      const v = -search(apply(s, m), depth - 1, -beta, -alpha);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+  function botMove(s) {
+    const ms = legal(s);
+    if (Math.random() < BLUNDER) return rand(ms);
+    const scored = ms.map(m => ({ m, v: -search(apply(s, m), 1, -Infinity, Infinity) }));
+    const top = Math.max(...scored.map(x => x.v));
+    return rand(scored.filter(x => x.v >= top - SLOP).map(x => x.m));
+  }
+  // ENGINE END
+
+  const bd = document.getElementById('bd'), msg = document.getElementById('m');
+  // Each piece is a small drawing. White pieces are light with a dark outline, black pieces are dark with a light outline.
+  const BASE = '<path d="M11.5 36h22v4.5h-22z"/>';
+  const PIECE = {
+    p: '<circle cx="22.5" cy="13.5" r="6.2"/><path d="M15.5 36c0-7 3-11.5 7-14.3 4 2.8 7 7.3 7 14.3z"/>' + BASE,
+    r: '<path d="M14 36V18h17v18z"/><path d="M12 18v-8h4.5v3h3v-3h5v3h3v-3H33v8z"/>' + BASE,
+    n: '<path d="M14 36c0-7 1-12 5-16-3-1-4-3-5-5.5L19 8l3 2.5c8-.5 12.5 5 12.5 12.5V36z"/><circle class="e" cx="23.5" cy="14.5" r="1.4"/>' + BASE,
+    b: '<path d="M15 36c0-6 3-9.5 7.5-14 4.5 4.5 7.5 8 7.5 14z"/><ellipse cx="22.5" cy="16" rx="5.2" ry="7"/><circle cx="22.5" cy="7.5" r="2.3"/><path class="n" d="M19.8 15.5l5.4 3.4"/>' + BASE,
+    q: '<path d="M12 36L9 14l6 11 .5-15 3.5 15 3.5-17 3.5 17 3.5-15 .5 15 6-11-3 22z"/><circle cx="9" cy="12.5" r="1.9"/><circle cx="15.5" cy="8.5" r="1.9"/><circle cx="22.5" cy="6.5" r="1.9"/><circle cx="29.5" cy="8.5" r="1.9"/><circle cx="36" cy="12.5" r="1.9"/>' + BASE,
+    k: '<path d="M13 36c-1-9 3-14 9.5-16 6.5 2 10.5 7 9.5 16z"/><rect x="19.5" y="13.5" width="6" height="8"/><path d="M21 3.5h3v4h3.5v3H24v4h-3v-4h-3.5v-3H21z"/>' + BASE
+  };
+  let state, sel, targets, last, over, thinking, t0, playerMoves;
+
+  function newGame() {
+    state = newState(); sel = -1; targets = []; last = null; over = false; thinking = false; t0 = 0; playerMoves = 0;
+    msg.textContent = 'Your move. You are white, and the bot is a beginner.';
+    draw();
+  }
+  function draw() {
+    bd.textContent = '';
+    const chk = inCheck(state) ? kingSq(state.b, state.turn) : -1;
+    for (let i = 0; i < 64; i++) {
+      const r = i >> 3, c = i & 7, p = state.b[i];
+      const b = document.createElement('button');
+      b.className = 'sq ' + ((r + c) % 2 ? 'd' : 'l') + (last && (i === last.from || i === last.to) ? ' last' : '') +
+        (i === sel ? ' sel' : '') + (i === chk ? ' chk' : '') +
+        (targets.some(m => m.to === i) ? ' tg' + (p !== '.' ? ' cp' : '') : '');
+      if (p !== '.') {
+        const sp = document.createElement('span');
+        sp.className = isW(p) ? 'pw' : 'pb';
+        sp.innerHTML = '<svg viewBox="0 0 45 45" aria-hidden="true">' + PIECE[p.toLowerCase()] + '</svg>';
+        b.append(sp);
+      }
+      b.setAttribute('aria-label', 'abcdefgh'[c] + (8 - r) + (p !== '.' ? ' ' + p : ''));
+      b.onclick = () => click(i);
+      bd.append(b);
+    }
+  }
+  function click(i) {
+    if (over || thinking || state.turn !== 'w') return;
+    if (sel >= 0) {
+      const mv = targets.find(m => m.to === i);   // promotions list the queen first, so pawns become queens
+      if (mv) { playerMove(mv); return; }
+    }
+    const p = state.b[i];
+    if (p !== '.' && isW(p)) { sel = i; targets = legal(state).filter(m => m.from === i); } else { sel = -1; targets = []; }
+    draw();
+  }
+  function playerMove(m) {
+    if (!t0) t0 = Date.now();
+    playerMoves++;
+    state = apply(state, m); last = m; sel = -1; targets = [];
+    const st = status(state);
+    if (st === 'checkmate') {
+      over = true; msg.textContent = 'Checkmate! You win!';
+      parent.postMessage({ type: 'inside-win', game: 'chess', score: playerMoves, seconds: Math.max(1, Math.round((Date.now() - t0) / 1000)) }, location.origin);
+    } else if (st !== 'playing') { over = true; msg.textContent = 'It is a draw.'; }
+    else { thinking = true; msg.textContent = 'The bot is thinking...'; setTimeout(botTurn, 450); }
+    draw();
+  }
+  function botTurn() {
+    state = apply(state, botMove(state)); last = null;
+    const ms = legal(state);
+    thinking = false;
+    const st = status(state);
+    if (st === 'checkmate') { over = true; msg.textContent = 'Checkmate. The bot wins this time.'; }
+    else if (st !== 'playing') { over = true; msg.textContent = 'It is a draw.'; }
+    else msg.textContent = inCheck(state) ? 'Check! Your move.' : 'Your move.';
+    draw();
+  }
+  document.getElementById('r').onclick = newGame;
+  // Let the main site see key presses, so its return-to-calculator key still works.
+  addEventListener('keydown', e => parent.postMessage({ type: 'inside-key', key: e.key }, location.origin));
+  newGame();
+</script>
+</body>
+</html>

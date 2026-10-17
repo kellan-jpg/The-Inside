@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Minesweeper</title>
+<style>
+  html { background: #0b0e13; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0e13; color: #e8ecf1; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .wrap { text-align: center; }
+  #g { display: grid; grid-template-columns: repeat(9, 36px); gap: 3px; justify-content: center; }
+  .cell { width: 36px; height: 36px; padding: 0; font: inherit; font-size: 18px; font-weight: 700; border: 1px solid #2b4a7a; border-radius: 6px; background: linear-gradient(160deg, #1c3a6b, #142a4d); color: #fff; cursor: pointer; }
+  .cell.open { background: #0b0e13; border-color: #1b2029; cursor: default; }
+  .cell.flag { color: #ff8f8f; font-size: 14px; }
+  .cell.mine { background: #7a1f1f; border-color: #a33; }
+  .cell[data-n="1"] { color: #6fb1ff; } .cell[data-n="2"] { color: #8fe3b0; } .cell[data-n="3"] { color: #ff8f8f; }
+  .cell[data-n="4"] { color: #c9a0ff; } .cell[data-n="5"], .cell[data-n="6"], .cell[data-n="7"], .cell[data-n="8"] { color: #ffd27f; }
+  p { margin: 12px 0 8px; color: #8b94a1; min-height: 22px; }
+  .btn { font: inherit; font-size: 15px; font-weight: 500; padding: 9px 16px; margin: 0 4px; border: 0; border-radius: 10px; background: #4b94ff; color: #04070c; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="g"></div>
+  <p id="i"></p>
+  <button class="btn" id="r">New game</button>
+  <button class="btn" id="f">Flag mode: off</button>
+  <p>Tap a square to dig. Turn on flag mode (or right-click) to mark a mine.</p>
+</div>
+<script>
+  const N = 9, M = 10, grid = document.getElementById('g'), info = document.getElementById('i'), flagBtn = document.getElementById('f');
+  let cells, first, over, won, flags, flagMode = false, t0 = 0;
+
+  const nb = i => {
+    const x = i % N, y = Math.floor(i / N), r = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const a = x + dx, b = y + dy;
+      if ((dx || dy) && a >= 0 && b >= 0 && a < N && b < N) r.push(b * N + a);
+    }
+    return r;
+  };
+  function reset() {
+    cells = Array.from({ length: N * N }, () => ({ m: false, r: false, f: false, n: 0 }));
+    first = true; over = false; won = false; flags = 0;
+    draw();
+  }
+  function place(safe) {
+    let k = 0;
+    while (k < M) { const i = Math.floor(Math.random() * N * N); if (i === safe || cells[i].m) continue; cells[i].m = true; k++; }
+    cells.forEach((c, i) => { c.n = nb(i).filter(j => cells[j].m).length; });
+  }
+  function reveal(i) {
+    if (over || cells[i].r || cells[i].f) return;
+    if (first) { place(i); first = false; t0 = Date.now(); }
+    if (cells[i].m) { over = true; cells.forEach(c => { if (c.m) c.r = true; }); draw(); return; }
+    const stack = [i];
+    while (stack.length) {
+      const j = stack.pop(), c = cells[j];
+      if (c.r || c.f) continue;
+      c.r = true;
+      if (c.n === 0) nb(j).forEach(k => { if (!cells[k].r) stack.push(k); });
+    }
+    if (cells.filter(c => c.r).length === N * N - M) {
+      won = true; over = true;
+      const sec = Math.max(2, Math.round((Date.now() - t0) / 1000));
+      parent.postMessage({ type: 'inside-win', game: 'minesweeper', score: sec, seconds: sec }, location.origin);
+    }
+    draw();
+  }
+  function flag(i) {
+    if (over || cells[i].r) return;
+    cells[i].f = !cells[i].f;
+    flags += cells[i].f ? 1 : -1;
+    draw();
+  }
+  function draw() {
+    grid.textContent = '';
+    cells.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = 'cell' + (c.r ? ' open' : '') + (c.r && c.m ? ' mine' : '');
+      if (c.r && c.m) b.textContent = '●';
+      else if (c.r && c.n) { b.textContent = c.n; b.dataset.n = c.n; }
+      else if (!c.r && c.f) { b.textContent = '▲'; b.classList.add('flag'); }
+      b.setAttribute('aria-label', 'Square ' + (i + 1));
+      b.onclick = () => (flagMode ? flag(i) : reveal(i));
+      b.oncontextmenu = e => { e.preventDefault(); flag(i); };
+      grid.append(b);
+    });
+    info.textContent = won ? 'You win!' : over ? 'Boom! Game over.' : 'Mines left: ' + (M - flags);
+    flagBtn.textContent = 'Flag mode: ' + (flagMode ? 'on' : 'off');
+  }
+  document.getElementById('r').onclick = reset;
+  flagBtn.onclick = () => { flagMode = !flagMode; draw(); };
+  // Let the main site see key presses, so its return-to-calculator key still works.
+  addEventListener('keydown', e => parent.postMessage({ type: 'inside-key', key: e.key }, location.origin));
+  reset();
+</script>
+</body>
+</html>
